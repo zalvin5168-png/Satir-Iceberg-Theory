@@ -85,7 +85,7 @@
 
     /* 呼吸圓環過渡 */
     .breath-orb {
-      transition: transform 4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 4s ease;
+      transition: transform 6s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 6s ease;
     }
 
     /* NAC 模式中斷脈衝效果 */
@@ -331,11 +331,11 @@
           '表面和諧，內心可能累積不滿。'
         ],
         resources: [
-          { original: '體貼', transformed: '同理心' },
-          { original: '配合', transformed: '合作能力' },
-          { original: '敏感', transformed: '情緒覺察力' },
-          { original: '顧慮別人', transformed: '關懷與照顧' },
-          { original: '願意付出', transformed: '慷慨與愛' }
+          { original: '體貼', transformed: '同理心', desc: '能看見並理解他人的感受與處境，同時不需靠犧牲自己來證明在乎。' },
+          { original: '配合', transformed: '合作能力', desc: '願意彈性協調、促成共好，並在團隊與關係中保有自己的立場。' },
+          { original: '敏感', transformed: '情緒覺察力', desc: '能細膩捕捉自己與環境的氛圍變化，將這份敏銳當成照顧彼此的雷達。' },
+          { original: '顧慮別人', transformed: '關懷與照顧', desc: '出於善意與餘裕地為他人設想，而不是出於害怕被討厭的義務。' },
+          { original: '願意付出', transformed: '慷慨與愛', desc: '有意識地分享自己的時間與善意，並在付出之後依然感到充實與平等。' }
         ],
         directionTitle: '轉變方向',
         direction: '從「我必須讓你滿意」，轉變成「我在乎你的感受，也尊重自己的需求」。',
@@ -356,6 +356,7 @@
           '說話前反覆觀察對方表情，刻意把自己的真實想法往後退讓。'
         ],
         nacOldPattern: '習慣性說「沒事、都好、對不起」，壓抑自身需要來換取表面平靜。',
+        nacCuriosityInterrupt: '「咦？原來我現在急著說『沒關係、我都可以』，是想趕快保護這段關係不要破裂。先停一下，我也問問自己：此刻的我其實還好嗎？」',
         nacPainCost: '持續把「自己」縮小，長期累積委屈與無力感，反而讓關係失去真實的雙向交流。',
         nacPleasureFreedom: '保有對人的同理、照顧與合作力，同時讓「自己」回到關係之中，既能溫柔待人，也能真誠說出界線。',
         nacDeclarationDefault: '我珍視自己對他人的體貼與關懷，現在我選擇在在乎你感受的同時，也一樣尊重並照顧我自己的需求。',
@@ -389,11 +390,11 @@
           '容易把問題歸咎於外在環境或他人。'
         ],
         resources: [
-          { original: '強勢', transformed: '果斷' },
-          { original: '批判', transformed: '分析與辨識能力' },
-          { original: '控制', transformed: '組織與管理能力' },
-          { original: '堅持', transformed: '原則與責任感' },
-          { original: '直接', transformed: '勇於表達' }
+          { original: '強勢', transformed: '果斷', desc: '在關鍵時刻有勇氣做出清晰決定並承擔方向，而不必透過壓迫他人。' },
+          { original: '批判', transformed: '分析與辨識能力', desc: '能敏銳看出問題盲點與關鍵所在，用來改善現況而非否定他人價值。' },
+          { original: '控制', transformed: '組織與管理能力', desc: '善於整合資源、建立秩序與步驟，讓事情有條理地推進。' },
+          { original: '堅持', transformed: '原則與責任感', desc: '對重要價值與承諾不輕易妥協，展現可靠且穩定的擔當。' },
+          { original: '直接', transformed: '勇於表達', desc: '能坦率、真誠地說出自己的感受、界線與立場，同時尊重對方。' }
         ],
         directionTitle: '成長方向',
         direction: '從「都是你的錯」，轉變成「我有我的感受、需求與立場，我可以清楚表達，而不必攻擊你」。',
@@ -414,6 +415,7 @@
           '身體感覺緊繃與升溫，第一時間指出外在環境或他人做錯的地方。'
         ],
         nacOldPattern: '自動化說出「都是你的錯」或「為什麼你連這都做不好」，以強勢武裝掩蓋內心無助。',
+        nacCuriosityInterrupt: '「咦？原來我現在語氣變重、想立刻糾正對方，是想保護自己不被無助或失控淹沒。先停一下，我可以先說出我的擔心，而不必攻擊誰。」',
         nacPainCost: '越是用攻擊來自我保護，越容易把他人推遠，使自己更孤立並承受獨自扛責的壓力。',
         nacPleasureFreedom: '將這股充沛能量轉化為果斷、組織管理與勇於表達，讓別人願意信任跟隨，而不必靠恐懼服從。',
         nacDeclarationDefault: '我看見自己強勢背後其實想負起責任與保護安全；現在我選擇用果斷、清晰而不攻擊的方式，表達我的感受與立場。',
@@ -448,11 +450,11 @@
           '容易忽略關係中的情緒需求。'
         ],
         resources: [
-          { original: '理性', transformed: '客觀判斷' },
-          { original: '分析', transformed: '問題解決能力' },
-          { original: '冷靜', transformed: '情緒穩定' },
-          { original: '重視規則', transformed: '原則與一致性', hasTip: true },
-          { original: '思考周密', transformed: '規劃與策略能力' }
+          { original: '理性', transformed: '客觀判斷', desc: '能在混亂或壓力中抽離片面成見，以事實與脈絡作為穩健決策的基礎。' },
+          { original: '分析', transformed: '問題解決能力', desc: '擅長拆解複雜結構、找出因果關聯，提出具體可行的解決方案。' },
+          { original: '冷靜', transformed: '情緒穩定', desc: '在波動情境中維持內在定力，先安頓自己再陪伴對話進行。' },
+          { original: '重視規則', transformed: '原則與一致性', desc: '依循內在深層價值去行動，讓外在言行與心中重視的理念保持一致。', hasTip: true },
+          { original: '思考周密', transformed: '規劃與策略能力', desc: '能預見風險與長遠影響，設計周全且具前瞻性的行動藍圖。' }
         ],
         directionTitle: '成長方向',
         direction: '從「只要講道理就能解決問題」，轉變成「理性可以幫助我理解事情，情緒則幫助我理解自己與別人」。',
@@ -461,7 +463,7 @@
           fear: '情緒失控、脆弱',
           expression: '分析、講道理'
         },
-        curiosityTarget: '照亮被忽略的 1/3：自己與他人',
+        curiosityTarget: '照亮被忽略的 2/3：自己與他人',
         curiosityPrompt: '在把事情分析到無懈可擊之外，如果對「我們此刻的心情溫度」保持一點好奇：除了正確的道理，此刻的我與對方，心裡正在經歷什麼？',
         curiosityReframe: {
           oldHabit: '「我是不是太冷漠了，怎麼遇到事情就只會講道理？」',
@@ -473,6 +475,7 @@
           '對無法預測或非理性的情境感到緊繃，習慣用道理證明事情的正確性。'
         ],
         nacOldPattern: '自動化進入「講道理模式」，把情緒隔絕在門外，以為邏輯正確就解決了一切。',
+        nacCuriosityInterrupt: '「咦？原來我現在正忙著把情緒關掉、只講大道理，是想用秩序保護自己不被脆弱碰傷。先停一下，除了道理之外，我心裡此刻的感覺是什麼？」',
         nacPainCost: '雖然把事情處理得井井有條，卻因為抽離了「自己」與「他人」，讓關係顯得疏離且缺乏溫度。',
         nacPleasureFreedom: '保留珍貴的客觀判斷、規劃策略與情緒穩定，同時允許感受作為內在雷達，與理性並肩工作。',
         nacDeclarationDefault: '理性幫助我看清事情脈絡，現在我也歡迎自己的情緒進場，讓智慧與溫度並行，達成真正的原則與一致性。',
@@ -507,11 +510,11 @@
           '有時候看起來活潑，內在卻可能不安。'
         ],
         resources: [
-          { original: '幽默', transformed: '幽默感與創造力' },
-          { original: '跳躍思考', transformed: '創意思維' },
-          { original: '轉換焦點', transformed: '彈性與應變能力' },
-          { original: '活潑', transformed: '活力與感染力' },
-          { original: '不拘泥', transformed: '開放與多元思考' }
+          { original: '幽默', transformed: '幽默感與創造力', desc: '用輕鬆不帶惡意的視角看待張力，為關係帶來呼吸空間與新視角。' },
+          { original: '跳躍思考', transformed: '創意思維', desc: '能跳脫單一框架、連結不同靈感，在僵局中看見意想不到的出路。' },
+          { original: '轉換焦點', transformed: '彈性與應變能力', desc: '面對突發狀況不致僵化卡死，能迅速調整角度與步伐。' },
+          { original: '活潑', transformed: '活力與感染力', desc: '為身邊帶來輕盈與生命力，讓嚴肅的時刻也能保有一份人味與溫度。' },
+          { original: '不拘泥', transformed: '開放與多元思考', desc: '願意接納事情有不只一種解法，尊重差異並保持好奇心。' }
         ],
         directionTitle: '成長方向',
         direction: '從「我不想面對這件事」，轉變成「我可以用輕鬆的方式面對問題，但不需要逃避它」。',
@@ -520,7 +523,7 @@
           fear: '衝突、不安全',
           expression: '轉移、逃避'
         },
-        curiosityTarget: '照亮被忽略的 1/3：自己、他人與情境',
+        curiosityTarget: '照亮被忽略的 3/3：自己、他人與情境',
         curiosityPrompt: '先不急著轉開話題或離開現場，如果像微風一樣好奇地停下來看 3 秒：是什麼樣的氣氛讓我覺得有點緊繃、不太安全？',
         curiosityReframe: {
           oldHabit: '「我怎麼又在逃避問題、沒辦法好好停下來面對？」',
@@ -532,6 +535,7 @@
           '同時開啟好幾件事或迅速轉換話題，讓自己不必停留在不安的情緒裡。'
         ],
         nacOldPattern: '自動化啟動「閃躲與轉移」，用玩笑或忙碌把沉重的當下輕輕推開。',
+        nacCuriosityInterrupt: '「咦？原來我現在想開玩笑或轉開話題，是感覺氣氛太沉重、想帶自己逃離不安。先停一下，我可以在不逃開的情況下，讓自己先喘口氣嗎？」',
         nacPainCost: '短暫逃開了尷尬與衝突，但真正重要的需要仍停在原地，久了反而讓內在感到飄浮與不安。',
         nacPleasureFreedom: '善用天賦的幽默、創意思維、彈性應變與感染力，在安全感中帶著輕鬆的態度穩穩面對議題。',
         nacDeclarationDefault: '我欣賞自己能化解緊繃的幽默與創造力；現在我能帶著這份輕鬆與彈性穩穩留在現場，溫柔面對當下。',
@@ -583,6 +587,7 @@
       mainTab: 'atlas',
       atlasStance: 'placater',
       atlasCuriosityOpen: false,
+      atlasRevealedTraits: [],
       wizard: {
         step: 1,
         stanceId: 'placater',
@@ -602,6 +607,39 @@
     let breathInterval = null;
     let breathActive = false;
     let toastTimer = null;
+
+    // 音量基準（調降 20% = 0.8）與深呼吸期間降音 50%（0.4）
+    const BASE_MUSIC_VOLUME = 0.8;
+    const DUCKED_MUSIC_VOLUME = BASE_MUSIC_VOLUME * 0.5;
+    let musicFadeTimer = null;
+
+    function fadeMusicVolume(targetVol, durationMs = 600) {
+      const audio = document.getElementById('bgMusic');
+      if (!audio) return;
+      if (musicFadeTimer) {
+        clearInterval(musicFadeTimer);
+        musicFadeTimer = null;
+      }
+      try {
+        const startVol = typeof audio.volume === 'number' ? audio.volume : BASE_MUSIC_VOLUME;
+        const steps = 15;
+        const stepTime = Math.max(20, Math.round(durationMs / steps));
+        let currentStep = 0;
+
+        musicFadeTimer = setInterval(() => {
+          currentStep++;
+          const progress = Math.min(1, currentStep / steps);
+          const nextVol = startVol + (targetVol - startVol) * progress;
+          try {
+            audio.volume = Math.max(0, Math.min(1, nextVol));
+          } catch (e) {}
+          if (progress >= 1) {
+            clearInterval(musicFadeTimer);
+            musicFadeTimer = null;
+          }
+        }, stepTime);
+      } catch (e) {}
+    }
 
     // =========================================================================
     // 3. 通用輔助元件（SVG 1/3 圓形圖、Toast、Tip 彈窗、剪貼簿）
@@ -697,11 +735,15 @@
     }
 
     function stopBreathingLoop() {
+      const wasActive = breathActive;
       if (breathInterval) {
         clearInterval(breathInterval);
         breathInterval = null;
       }
       breathActive = false;
+      if (wasActive) {
+        fadeMusicVolume(BASE_MUSIC_VOLUME, 800);
+      }
     }
 
     // =========================================================================
@@ -716,6 +758,10 @@
       const errorPill = document.getElementById('music-error-pill');
 
       if (!audio || !btn) return;
+
+      try {
+        audio.volume = BASE_MUSIC_VOLUME;
+      } catch (e) {}
 
       let isPlaying = false;
 
@@ -773,6 +819,9 @@
             errorPill.classList.remove('flex');
           }
           try {
+            try {
+              audio.volume = breathActive ? DUCKED_MUSIC_VOLUME : BASE_MUSIC_VOLUME;
+            } catch (e) {}
             const playPromise = audio.play();
             if (playPromise && typeof playPromise.then === 'function') {
               playPromise
@@ -868,6 +917,7 @@
         btn.addEventListener('click', () => {
           state.atlasStance = btn.dataset.atlasStance;
           state.atlasCuriosityOpen = false;
+          state.atlasRevealedTraits = [];
           renderAtlas();
         });
       });
@@ -933,26 +983,59 @@
         return;
       }
 
-      const resourcesMarkup = s.resources.map(r => `
-        <div class="bg-white rounded-2xl p-3.5 border border-sand flex items-center justify-between gap-2 shadow-2xs">
-          <div class="flex items-center gap-2">
-            <span class="px-2.5 py-1 rounded-lg bg-cream text-muted text-xs font-medium">${r.original}</span>
-            <span class="text-sage font-bold text-xs">➔</span>
-            <span class="text-xs sm:text-sm font-bold text-deepsea">${r.transformed}</span>
+      const allTraitsRevealed = s.resources.every(r => state.atlasRevealedTraits.includes(r.original));
+
+      const resourcesMarkup = s.resources.map(r => {
+        const isRevealed = state.atlasRevealedTraits.includes(r.original);
+        return `
+          <div
+            role="button"
+            tabindex="0"
+            data-atlas-trait="${r.original}"
+            aria-expanded="${isRevealed}"
+            class="rounded-2xl p-4 border transition-all duration-200 cursor-pointer select-none ${
+              isRevealed
+                ? 'bg-white border-sage shadow-sm ring-2 ring-sage/15'
+                : 'bg-white/85 border-sand hover:bg-white hover:border-sage/50 shadow-2xs'
+            }"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-3 py-1 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+                  isRevealed ? 'bg-sageLight text-sage' : 'bg-cream text-ink'
+                }">${r.original}</span>
+                ${isRevealed ? `
+                  <span class="text-sage font-bold text-xs">➔</span>
+                  <span class="text-xs sm:text-sm font-bold text-deepsea">✨ ${r.transformed}</span>
+                ` : ''}
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                ${isRevealed && r.hasTip ? `
+                  <button
+                    type="button"
+                    id="computer-tip-btn"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-deepseaLight hover:bg-deepsea hover:text-white text-deepsea text-[11px] font-bold transition-colors cursor-pointer"
+                    aria-label="查看原則與一致性註解"
+                  >
+                    <span>[i]</span>
+                    <span>註解</span>
+                  </button>
+                ` : ''}
+                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  isRevealed ? 'text-sage bg-sageLight/60' : 'text-muted bg-linen'
+                }">
+                  ${isRevealed ? '收合 ▲' : '點看轉化 ▾'}
+                </span>
+              </div>
+            </div>
+            ${isRevealed ? `
+              <p class="mt-2.5 pt-2.5 border-t border-sand/70 text-xs text-muted leading-relaxed animate-fade-up">
+                ${r.desc}
+              </p>
+            ` : ''}
           </div>
-          ${r.hasTip ? `
-            <button
-              type="button"
-              id="computer-tip-btn"
-              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-deepseaLight hover:bg-deepsea hover:text-white text-deepsea text-[11px] font-bold transition-colors cursor-pointer shrink-0"
-              aria-label="查看原則與一致性註解"
-            >
-              <span>[i]</span>
-              <span>註解</span>
-            </button>
-          ` : ''}
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
       card.innerHTML = `
         <div class="space-y-6 animate-fade-up">
@@ -1027,23 +1110,32 @@
                   <p class="text-muted">${s.curiosityReframe.oldHabit}</p>
                 </div>
                 <div class="bg-warmgoldLight/60 rounded-xl p-3 border border-warmgold/30 space-y-1">
-                  <div class="font-bold text-amber-900">換上好奇心的溫柔提問：</div>
+                  <div class="font-bold text-amber-900">切換成溫柔好奇時：</div>
                   <p class="text-ink font-medium">${s.curiosityReframe.warmShift}</p>
                 </div>
               </div>
             ` : ''}
           </div>
 
-          <!-- 潛在資源雙欄對照（原本的特質 ➔ 健康轉化後的資源） -->
+          <!-- 潛在資源互動探索（點擊原本特質，浮現轉化資源與解釋） -->
           <div class="bg-gradient-to-br from-sageLight/70 via-linen to-warmgoldLight/70 rounded-3xl p-5 sm:p-6 border border-sage/25 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h3 class="text-xs sm:text-sm font-bold text-sage flex items-center gap-1.5">
-                <span>🌱</span> 潛在資源（原本的特質 ➔ 健康轉化後的資源）
-              </h3>
-              <span class="text-[11px] text-muted">資源是中性的，取決於我們如何轉化運用</span>
+              <div>
+                <h3 class="text-xs sm:text-sm font-bold text-sage flex items-center gap-1.5">
+                  <span>🌱</span> 潛在資源（點擊「原本特質」，看見中性轉化與解釋）
+                </h3>
+                <p class="text-[11px] text-muted mt-0.5">資源是中性的，點開每一項特質，看看它健康轉化後的樣子。</p>
+              </div>
+              <button
+                type="button"
+                id="atlas-toggle-all-traits"
+                class="self-start sm:self-auto px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white border border-sage/30 text-sage text-xs font-semibold transition-colors cursor-pointer shrink-0"
+              >
+                ${allTraitsRevealed ? '收合全部資源' : '展開全部資源'}
+              </button>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
               ${resourcesMarkup}
             </div>
 
@@ -1061,8 +1153,44 @@
         </div>
       `;
 
+      const toggleTrait = (traitName) => {
+        const idx = state.atlasRevealedTraits.indexOf(traitName);
+        if (idx > -1) state.atlasRevealedTraits.splice(idx, 1);
+        else state.atlasRevealedTraits.push(traitName);
+        renderAtlas();
+      };
+
+      card.querySelectorAll('[data-atlas-trait]').forEach(el => {
+        el.addEventListener('click', () => {
+          toggleTrait(el.dataset.atlasTrait);
+        });
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleTrait(el.dataset.atlasTrait);
+          }
+        });
+      });
+
+      const toggleAllTraitsBtn = document.getElementById('atlas-toggle-all-traits');
+      if (toggleAllTraitsBtn) {
+        toggleAllTraitsBtn.addEventListener('click', () => {
+          if (allTraitsRevealed) {
+            state.atlasRevealedTraits = [];
+          } else {
+            state.atlasRevealedTraits = s.resources.map(r => r.original);
+          }
+          renderAtlas();
+        });
+      }
+
       const tipBtn = document.getElementById('computer-tip-btn');
-      if (tipBtn) tipBtn.addEventListener('click', openTipModal);
+      if (tipBtn) {
+        tipBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openTipModal();
+        });
+      }
 
       const atlasCuriosityBtn = document.getElementById('atlas-curiosity-toggle');
       if (atlasCuriosityBtn) {
@@ -1140,7 +1268,7 @@
                 </div>
                 <div class="space-y-1">
                   <div id="breath-round-badge" class="text-xs font-bold text-sage">3 次深呼吸停頓引導 · 把注意力帶回當下</div>
-                  <p id="breath-instruction" class="text-xs sm:text-sm text-ink font-medium">點擊開始，跟著圓環完成 3 次深呼吸（吸氣 4 秒、停留 2 秒、呼氣 4 秒）。</p>
+                  <p id="breath-instruction" class="text-xs sm:text-sm text-ink font-medium">點擊開始，跟著圓環完成 3 次深呼吸（吸氣 6 秒、停住 4 秒、吐氣 6 秒）。</p>
                 </div>
               </div>
               <button
@@ -1187,7 +1315,7 @@
           </div>
         `;
 
-        // 呼吸計時邏輯（3 次深呼吸循環：每次 4秒吸 -> 2秒停 -> 4秒吐）
+        // 呼吸計時邏輯（3 次深呼吸循環：每次 6秒吸 -> 4秒停 -> 6秒吐，共 16 秒/次、48 秒）
         const breathBtn = document.getElementById('breath-toggle-btn');
         const breathOrb = document.getElementById('breath-orb');
         const breathCountdown = document.getElementById('breath-countdown');
@@ -1197,45 +1325,51 @@
         breathBtn.addEventListener('click', () => {
           if (breathActive) {
             stopBreathingLoop();
+            breathOrb.style.transitionDuration = '1.2s';
             breathOrb.style.transform = 'scale(1)';
             breathCountdown.textContent = '3 次';
             breathRoundBadge.textContent = '3 次深呼吸停頓引導 · 把注意力帶回當下';
-            breathInstruction.textContent = '已暫停呼吸引導，隨時可以再次回到這個穩定的節奏。';
+            breathInstruction.textContent = '已暫停呼吸引導（音樂已恢復原本音量），隨時可以再次回到這個穩定的節奏。';
             breathBtn.textContent = '🌬️ 開始 3 次深呼吸';
             return;
           }
 
           breathActive = true;
+          fadeMusicVolume(DUCKED_MUSIC_VOLUME, 600);
           breathBtn.textContent = '⏸ 暫停呼吸';
           let tick = 0;
 
           const updateBreathPhase = () => {
-            if (tick >= 30) {
+            if (tick >= 48) {
               stopBreathingLoop();
+              breathOrb.style.transitionDuration = '1.5s';
               breathOrb.style.transform = 'scale(1)';
               breathCountdown.textContent = '完成';
               breathRoundBadge.textContent = '✓ 已完成 3 次深呼吸停頓';
-              breathInstruction.textContent = '現在身心已更穩定，請從下方挑選此刻想探索的應對姿態。';
+              breathInstruction.textContent = '現在身心已更穩定（背景音樂已溫柔恢復），請從下方挑選此刻想探索的應對姿態。';
               breathBtn.textContent = '🌬️ 再進行 3 次深呼吸';
               return;
             }
 
-            const round = Math.floor(tick / 10) + 1;
-            const cycle = tick % 10;
+            const round = Math.floor(tick / 16) + 1;
+            const cycle = tick % 16;
             breathRoundBadge.textContent = `正在進行第 ${round} / 3 次深呼吸`;
 
-            if (cycle < 4) {
-              breathOrb.style.transform = 'scale(1.38)';
-              breathCountdown.textContent = `吸 ${4 - cycle}`;
-              breathInstruction.textContent = '緩緩吸氣⋯⋯讓空氣安穩進入胸口與腹部。';
-            } else if (cycle < 6) {
-              breathOrb.style.transform = 'scale(1.38)';
-              breathCountdown.textContent = `停 ${6 - cycle}`;
-              breathInstruction.textContent = '輕輕停留片刻⋯⋯覺察此刻身體的安定。';
+            if (cycle < 6) {
+              breathOrb.style.transitionDuration = '6s';
+              breathOrb.style.transform = 'scale(1.4)';
+              breathCountdown.textContent = `吸 ${6 - cycle}`;
+              breathInstruction.textContent = '緩緩吸氣 6 秒⋯⋯讓空氣安穩進入胸口與腹部。';
+            } else if (cycle < 10) {
+              breathOrb.style.transitionDuration = '0.5s';
+              breathOrb.style.transform = 'scale(1.4)';
+              breathCountdown.textContent = `停 ${10 - cycle}`;
+              breathInstruction.textContent = '輕輕停住 4 秒⋯⋯覺察此刻身體的安定。';
             } else {
+              breathOrb.style.transitionDuration = '6s';
               breathOrb.style.transform = 'scale(0.95)';
-              breathCountdown.textContent = `吐 ${10 - cycle}`;
-              breathInstruction.textContent = '慢慢呼氣⋯⋯把緊繃與評斷輕輕放掉。';
+              breathCountdown.textContent = `吐 ${16 - cycle}`;
+              breathInstruction.textContent = '慢慢吐氣 6 秒⋯⋯把緊繃與評斷輕輕放掉。';
             }
             tick++;
           };
@@ -1519,7 +1653,6 @@
                 <div class="space-y-1">
                   <div class="text-xs font-bold text-clay">1. 模式中斷（用溫柔的好奇停頓，打破舊慣性）</div>
                   <p class="text-xs sm:text-sm text-muted">舊有慣性句型：<span class="text-ink font-medium">${s.nacOldPattern}</span></p>
-                  <p class="text-[11px] text-amber-800 font-medium">💡 一聲輕輕的「咦？原來我現在正在這樣保護自己」，就是最溫柔也最有效的模式中斷。</p>
                 </div>
                 <button
                   type="button"
@@ -1530,9 +1663,18 @@
                       : 'bg-clay text-white hover:bg-clay/90 shadow-sm'
                   }"
                 >
-                  ${w.interrupted ? '✓ 已用好奇心溫柔中斷自動反應' : '🔍 咦？先好奇停一下（中斷慣性）'}
+                  ${w.interrupted ? '✓ 已用好奇心溫柔中斷自動反應' : '🔍 咦？先好奇中斷一下（打斷慣性）'}
                 </button>
               </div>
+              ${w.interrupted ? `
+                <div class="bg-warmgoldLight/75 rounded-2xl p-4 border border-warmgold/35 space-y-1.5 animate-fade-up">
+                  <div class="text-xs font-bold text-amber-900">🕯️ 「${s.shortName}」的專屬好奇中斷：</div>
+                  <p class="font-serif text-xs sm:text-sm text-ink font-semibold leading-relaxed">${s.nacCuriosityInterrupt}</p>
+                  <p class="text-[11px] sm:text-xs text-muted leading-relaxed">
+                    一聲輕輕的「咦？原來我現在正在這樣保護自己」，就是最溫柔也最有效的模式中斷。
+                  </p>
+                </div>
+              ` : ''}
             </div>
 
             <!-- 2. 痛樂鏈結重設 -->
