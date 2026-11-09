@@ -83,9 +83,9 @@
     .wave-paused .wave-bar:nth-child(3) { height: 40%; }
     .wave-paused .wave-bar:nth-child(4) { height: 30%; }
 
-    /* 呼吸圓環 6 秒緩慢過渡 */
+    /* 呼吸圓環 8 秒緩慢過渡（依節奏動態調整） */
     .breath-orb {
-      transition: transform 6s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 6s ease;
+      transition: transform 8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 8s ease;
     }
 
     /* NAC 模式中斷脈衝效果 */
@@ -616,6 +616,15 @@
       { id: 'present', icon: '⚓', label: '它還在，但我更有空間陪著它了', reply: '這是最深也最真實的覺察——呼吸不是為了趕走感受，而是讓你有足夠的穩重，去陪著此刻有感覺的自己。' }
     ];
 
+    const WIZARD_STEP_META = [
+      { num: 1, label: '引導', title: '引導（Guidance）' },
+      { num: 2, label: '覺察', title: '覺察（Awareness）' },
+      { num: 3, label: '理解', title: '理解（Understanding）' },
+      { num: 4, label: '內化', title: '內化（Internalization）' },
+      { num: 5, label: '轉變', title: '轉變（Transformation）' },
+      { num: 6, label: '重新看待資源', title: '重新看待資源（Reframing）' }
+    ];
+
     // =========================================================================
     // 2. 應用程式全域狀態
     // =========================================================================
@@ -628,19 +637,22 @@
       wizard: {
         step: 1,
         stanceId: 'placater',
+        breathRhythm: '8-4-8',
         breathFocus: '先單純安頓自己',
+        voiceGuideEnabled: true,
+        selectedVoiceURI: '',
         breathCompleted: false,
         breathAfterFeel: '',
+        curiositySwitched: false,
         observation: '',
-        feelings: [],
         activeBodySignals: [],
         manualFeelings: [],
         suppressedFeelings: [],
+        feelings: [],
         customFeeling: '',
         needs: [],
         customNeed: '',
         claimedTraits: [],
-        curiositySwitched: false,
         interrupted: false,
         blindSpotOpen: false,
         nacDeclaration: '',
@@ -648,39 +660,33 @@
       }
     };
 
-    // 計算單一感受詞目前被幾個「身體氣象」訊號同時點亮
+    // 計算某個感受詞被幾個已開啟的「身體氣象」同時對應到
     function getFeelingBodyCount(tag) {
-      const w = state.wizard;
       let count = 0;
-      w.activeBodySignals.forEach(idx => {
+      state.wizard.activeBodySignals.forEach(idx => {
         const bs = BODY_SIGNALS[idx];
         if (bs && bs.hints.includes(tag)) count += 1;
       });
       return count;
     }
 
-    // 同步整理步驟 2 的最終已選感受列表（供步驟 6 與整合卡複製使用）
+    // 同步整理步驟 2 最終選中的感受清單（用於步驟 6 整合卡）
     function syncWizardFeelings() {
       const w = state.wizard;
-      const result = [];
-      NVC_FEELING_TAGS.forEach(tag => {
-        const bodyCount = getFeelingBodyCount(tag);
-        const isManual = w.manualFeelings.includes(tag);
-        const isSuppressed = w.suppressedFeelings.includes(tag);
-        if (!isSuppressed && (bodyCount > 0 || isManual)) {
-          result.push(tag);
-        }
+      w.feelings = NVC_FEELING_TAGS.filter(tag => {
+        if (w.suppressedFeelings.includes(tag)) return false;
+        return getFeelingBodyCount(tag) > 0 || w.manualFeelings.includes(tag);
       });
-      w.feelings = result;
     }
 
     // 呼吸計時器與狀態
     let breathTimer = null;
     let breathActive = false;
+    let breathMusicResumeTimeout = null;
     let toastTimer = null;
 
     // =========================================================================
-    // 3. 音樂播放控制、暫停切換與 Web Audio 深沉頌缽合成器
+    // 3. 音樂播放控制、暫停切換、語音引導與 Web Audio 深沉頌缽合成器
     // =========================================================================
     const BASE_VOLUME = 0.8;   // 預設音量（比原音小聲 20%）
     let musicFadeFrame = null;
@@ -688,308 +694,354 @@
     let musicPausedByBreath = false;
     let bowlAudioCtx = null;
 
-    function getBowlAudioContext() {
+    // 取消進行中的語音引導
+    function cancelBreathVoice() {
       try {
-        if (!bowlAudioCtx) {
-          const AudioCtx = window.AudioContext || window.webkitAudioContext;
-          if (AudioCtx) bowlAudioCtx = new AudioCtx();
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
         }
-        if (bowlAudioCtx && bowlAudioCtx.state === 'suspended') {
-          bowlAudioCtx.resume();
-        }
-      } catch (e) {
-        return null;
-      }
-      return bowlAudioCtx;
+      } catch (e) {}
     }
 
-    /**
-     * 物理泛音合成深沉西藏頌缽聲
-     * @param {'deep' | 'hold' | 'exhale' | 'close'} variant
-     */
-    function playSingingBowl(variant = 'deep') {
-      const ctx = getBowlAudioContext();
-      if (!ctx) return;
-
-      try {
-        const now = ctx.currentTime;
-
-        // 總輸出與溫潤低通濾波，壓低高頻亮度，突顯沉緩厚實的胸腔共鳴
-        const masterGain = ctx.createGain();
-        const lowpass = ctx.createBiquadFilter();
-        lowpass.type = 'lowpass';
-
-        if (variant === 'hold') {
-          lowpass.frequency.setValueAtTime(680, now);
-          lowpass.frequency.exponentialRampToValueAtTime(220, now + 8.0);
-          masterGain.gain.setValueAtTime(0.36, now);
-        } else if (variant === 'exhale') {
-          lowpass.frequency.setValueAtTime(720, now);
-          lowpass.frequency.exponentialRampToValueAtTime(210, now + 9.0);
-          masterGain.gain.setValueAtTime(0.42, now);
-        } else {
-          lowpass.frequency.setValueAtTime(920, now);
-          lowpass.frequency.exponentialRampToValueAtTime(260, now + 11.0);
-          masterGain.gain.setValueAtTime(0.48, now);
+    // 預先載入瀏覽器語音列表，優先挑選溫柔低沉的繁中／中文男聲
+    let cachedVoices = [];
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      cachedVoices = window.speechSynthesis.getVoices() || [];
+      window.speechSynthesis.onvoiceschanged = () => {
+        cachedVoices = window.speechSynthesis.getVoices() || [];
+        if (state.mainTab === 'wizard' && state.wizard.step === 1 && !breathActive) {
+          renderWizard();
         }
-
-        lowpass.connect(masterGain);
-        masterGain.connect(ctx.destination);
-
-        // 更低沉的協和下降頻率：吸氣 108 Hz -> 停住 81 Hz（四度平穩承接）-> 吐氣 72 Hz（五度深度落地）
-        // 同時將拍頻差縮小至 0.40 ~ 0.55 Hz，讓水波般的「嗡——」律動更緩慢深長
-        const baseFreq = variant === 'hold' ? 81.0 : variant === 'exhale' ? 72.0 : 108.0;
-        const duration = variant === 'hold' ? 12.0 : variant === 'exhale' ? 14.5 : variant === 'close' ? 18.5 : 16.5;
-
-        const partials = variant === 'hold'
-          ? [
-              // 停住時以無敲擊、緩慢浮現的低沉共鳴穩穩托住空間
-              { freq: baseFreq, gain: 0.44, decay: duration, attack: 0.45 },
-              { freq: baseFreq + 0.45, gain: 0.38, decay: duration * 0.96, attack: 0.45 },
-              { freq: baseFreq * 2.0, gain: 0.16, decay: duration * 0.60, attack: 0.35 },
-              { freq: baseFreq * 2.756, gain: 0.06, decay: duration * 0.38, attack: 0.30 }
-            ]
-          : variant === 'exhale'
-          ? [
-              // 吐氣時更低沉的 72 Hz 落地共振
-              { freq: baseFreq, gain: 0.46, decay: duration, attack: 0.28 },
-              { freq: baseFreq + 0.40, gain: 0.40, decay: duration * 0.96, attack: 0.28 },
-              { freq: baseFreq * 2.0, gain: 0.18, decay: duration * 0.62, attack: 0.22 },
-              { freq: baseFreq * 2.756, gain: 0.08, decay: duration * 0.42, attack: 0.18 }
-            ]
-          : [
-              // 吸氣／收尾主缽：108 Hz + 108.55 Hz 超慢速深沉拍頻
-              { freq: baseFreq, gain: 0.48, decay: duration, attack: 0.16 },
-              { freq: baseFreq + 0.55, gain: 0.42, decay: duration * 0.96, attack: 0.16 },
-              // 54 Hz 次低音胸腔共鳴
-              { freq: baseFreq * 0.5, gain: 0.20, decay: duration * 0.88, attack: 0.24 },
-              // 溫潤倍頻與緩慢頌缽泛音群
-              { freq: baseFreq * 2.0, gain: 0.12, decay: duration * 0.58, attack: 0.14 },
-              { freq: baseFreq * 2.756, gain: 0.09, decay: duration * 0.44, attack: 0.10 },
-              { freq: baseFreq * 2.756 + 0.9, gain: 0.06, decay: duration * 0.40, attack: 0.10 },
-              ...(variant === 'close'
-                ? [{ freq: baseFreq * 1.5, gain: 0.11, decay: duration * 0.75, attack: 0.28 }]
-                : [])
-            ];
-
-        partials.forEach(p => {
-          const osc = ctx.createOscillator();
-          const pGain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(p.freq, now);
-
-          pGain.gain.setValueAtTime(0.0001, now);
-          pGain.gain.linearRampToValueAtTime(p.gain, now + p.attack);
-          pGain.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
-
-          osc.connect(pGain);
-          pGain.connect(lowpass);
-          osc.start(now);
-          osc.stop(now + p.decay + 0.15);
-        });
-
-        // 僅在吸氣與收尾加上極柔和慢速的厚毛氈觸碰起音
-        if (variant === 'deep' || variant === 'close') {
-          const malletOsc = ctx.createOscillator();
-          const malletGain = ctx.createGain();
-          malletOsc.type = 'sine';
-          malletOsc.frequency.setValueAtTime(115, now);
-          malletOsc.frequency.exponentialRampToValueAtTime(52, now + 0.14);
-
-          malletGain.gain.setValueAtTime(0.0001, now);
-          malletGain.gain.linearRampToValueAtTime(0.065, now + 0.03);
-          malletGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-
-          malletOsc.connect(malletGain);
-          malletGain.connect(masterGain);
-          malletOsc.start(now);
-          malletOsc.stop(now + 0.18);
-        }
-      } catch (e) {
-        // 忽略不支援 Web Audio 的舊版環境
-      }
+      };
     }
 
-    function smoothSetMusicVolume(targetVol, durationMs = 700) {
-      const audio = document.getElementById('bgMusic');
-      if (!audio) return;
-      if (musicFadeFrame) {
-        cancelAnimationFrame(musicFadeFrame);
-        musicFadeFrame = null;
-      }
-      const startVol = audio.volume;
-      const startTime = performance.now();
+    const ALLOWED_VOICE_REGEX = /microsoft.*(hsiaochen|yunjhe).*online/i;
+    const MALE_VOICE_REGEX = /yunjhe/i;
 
-      function tick(now) {
-        const elapsed = now - startTime;
-        const t = Math.min(1, elapsed / durationMs);
-        const eased = 1 - Math.pow(1 - t, 3);
-        try {
-          audio.volume = Math.max(0, Math.min(1, startVol + (targetVol - startVol) * eased));
-        } catch (err) {
-          // 忽略部分裝置在未播放前設定 volume 的限制
+    function getAvailableZhVoices() {
+      const voices = (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.getVoices().length)
+        ? window.speechSynthesis.getVoices()
+        : cachedVoices;
+      return voices.filter(v => /^zh[-_]?TW/i.test(v.lang) && ALLOWED_VOICE_REGEX.test(v.name));
+    }
+
+    function selectDeepMaleVoice() {
+      const zhVoices = getAvailableZhVoices();
+      if (state.wizard.selectedVoiceURI) {
+        const manual = zhVoices.find(v => v.voiceURI === state.wizard.selectedVoiceURI);
+        if (manual) {
+          return { voice: manual, isMale: MALE_VOICE_REGEX.test(manual.name) };
         }
-        if (t < 1) {
-          musicFadeFrame = requestAnimationFrame(tick);
-        } else {
+      }
+
+      const yunJheVoice = zhVoices.find(v => MALE_VOICE_REGEX.test(v.name));
+      if (yunJheVoice) return { voice: yunJheVoice, isMale: true };
+
+      const hsiaoChenVoice = zhVoices[0] || null;
+      return { voice: hsiaoChenVoice, isMale: false };
+    }
+
+    // 播放溫柔、低沉、緩慢的中文身體感知語音引導
+    function speakBreathVoice(text) {
+      if (!state.wizard.voiceGuideEnabled || !text) return;
+      try {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        const { voice, isMale } = selectDeepMaleVoice();
+        if (voice) utter.voice = voice;
+        utter.lang = voice ? voice.lang : 'zh-TW';
+        utter.rate = voice ? (isMale ? 0.65 : 0.76) : 0.68;   // 男聲語速放慢更顯沉穩從容，留出更多呼吸空間
+        utter.pitch = voice ? (isMale ? 0.86 : 0.94) : 0.62;  // YunJhe 沉穩微降；HsiaoChen 保持溫潤自然；系統預設則壓低模擬低沉
+        utter.volume = 0.90;
+        window.speechSynthesis.speak(utter);
+      } catch (e) {}
+    }
+
+    // 平滑調整背景音樂音量
+    function fadeMusicVolumeTo(targetVol, durationMs = 600) {
+      return new Promise((resolve) => {
+        const audio = document.getElementById('bgMusic');
+        if (!audio) {
+          resolve();
+          return;
+        }
+        if (musicFadeFrame) {
+          cancelAnimationFrame(musicFadeFrame);
           musicFadeFrame = null;
         }
-      }
-      musicFadeFrame = requestAnimationFrame(tick);
-    }
-
-    // 開始呼吸時：若背景音樂正在播放，淡出並暫停音樂，改由頌缽取代
-    function pauseMusicForBreath() {
-      const audio = document.getElementById('bgMusic');
-      if (!audio) return;
-      if (breathFadeTimeout) {
-        clearTimeout(breathFadeTimeout);
-        breathFadeTimeout = null;
-      }
-      if (!audio.paused) {
-        musicPausedByBreath = true;
-        smoothSetMusicVolume(0, 550);
-        breathFadeTimeout = setTimeout(() => {
-          breathFadeTimeout = null;
-          if (breathActive && musicPausedByBreath) {
-            audio.pause();
-            updateMusicUI(false, true);
+        const clampedTarget = Math.max(0, Math.min(1, targetVol));
+        const startVol = audio.volume;
+        if (durationMs <= 0 || Math.abs(startVol - clampedTarget) < 0.005) {
+          audio.volume = clampedTarget;
+          resolve();
+          return;
+        }
+        const startTime = performance.now();
+        function step(now) {
+          // Ensure elapsed time and progress stay within [0, 1] even if rAF timestamp precedes startTime
+          const elapsed = Math.max(0, now - startTime);
+          const progress = Math.max(0, Math.min(1, elapsed / durationMs));
+          const nextVol = startVol + (clampedTarget - startVol) * progress;
+          audio.volume = Math.max(0, Math.min(1, nextVol));
+          if (progress < 1) {
+            musicFadeFrame = requestAnimationFrame(step);
+          } else {
+            musicFadeFrame = null;
+            resolve();
           }
-        }, 580);
-      }
+        }
+        musicFadeFrame = requestAnimationFrame(step);
+      });
     }
 
-    // 呼吸結束／暫停／離開時：若先前是因呼吸暫停音樂，則平緩恢復音樂播放
-    function resumeMusicAfterBreath() {
-      const audio = document.getElementById('bgMusic');
-      if (breathFadeTimeout) {
-        clearTimeout(breathFadeTimeout);
-        breathFadeTimeout = null;
-      }
-      if (!audio || !musicPausedByBreath) return;
-      musicPausedByBreath = false;
-
-      try {
-        audio.volume = 0;
-      } catch (e) {}
-      const playPromise = audio.play();
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise
-          .then(() => {
-            updateMusicUI(true);
-            smoothSetMusicVolume(BASE_VOLUME, 1000);
-          })
-          .catch(() => {
-            updateMusicUI(false);
-          });
-      } else {
-        updateMusicUI(true);
-        smoothSetMusicVolume(BASE_VOLUME, 1000);
-      }
-    }
-
-    function updateMusicUI(isPlaying, pausedForBowl = false) {
+    function updateMusicButtonUI(mode) {
       const btn = document.getElementById('music-toggle-btn');
       const icon = document.getElementById('music-icon');
       const waves = document.getElementById('music-waves');
       const label = document.getElementById('music-label');
       if (!btn || !icon || !waves || !label) return;
 
-      btn.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
-      if (isPlaying) {
+      const bars = waves.querySelectorAll('.wave-bar');
+      btn.setAttribute('aria-pressed', mode === 'playing' ? 'true' : 'false');
+
+      if (mode === 'playing') {
+        btn.disabled = false;
+        btn.removeAttribute('aria-disabled');
         icon.textContent = '🎵';
+        label.textContent = '開啟音樂中';
         waves.classList.remove('wave-paused');
         waves.classList.add('wave-playing');
-        waves.querySelectorAll('.wave-bar').forEach(b => {
-          b.classList.remove('bg-muted/50');
+        bars.forEach(b => {
+          b.classList.remove('bg-muted/50', 'bg-muted/40', 'bg-warmgold');
           b.classList.add('bg-sage');
         });
-        label.textContent = '開啟音樂中';
-        btn.classList.add('border-sage/45', 'bg-sageLight/85');
-        btn.classList.remove('border-sand', 'bg-white/95');
-      } else {
-        icon.textContent = pausedForBowl ? '🔔' : '🔇';
+        btn.classList.remove('border-sand', 'bg-white/95', 'border-warmgold/50', 'bg-warmgoldLight/90', 'bg-cream/85', 'text-muted', 'opacity-55', 'cursor-not-allowed', 'grayscale');
+        btn.classList.add('border-sage/50', 'bg-sageLight/95', 'hover:bg-cream', 'text-ink', 'active:scale-95', 'cursor-pointer');
+      } else if (mode === 'breath') {
+        btn.disabled = true;
+        btn.setAttribute('aria-disabled', 'true');
+        icon.textContent = '🔔';
+        label.textContent = '頌缽引導中 · 音樂暫停';
         waves.classList.remove('wave-playing');
         waves.classList.add('wave-paused');
-        waves.querySelectorAll('.wave-bar').forEach(b => {
-          b.classList.remove('bg-sage');
+        bars.forEach(b => {
+          b.classList.remove('bg-sage', 'bg-warmgold', 'bg-muted/50');
+          b.classList.add('bg-muted/40');
+        });
+        btn.classList.remove('bg-white/95', 'hover:bg-cream', 'text-ink', 'active:scale-95', 'cursor-pointer', 'border-sage/50', 'bg-sageLight/95', 'border-warmgold/50', 'bg-warmgoldLight/90');
+        btn.classList.add('border-sand', 'bg-cream/85', 'text-muted', 'opacity-55', 'cursor-not-allowed', 'grayscale');
+      } else {
+        btn.disabled = false;
+        btn.removeAttribute('aria-disabled');
+        icon.textContent = '🔇';
+        label.textContent = '靜音中 · 開啟音樂';
+        waves.classList.remove('wave-playing');
+        waves.classList.add('wave-paused');
+        bars.forEach(b => {
+          b.classList.remove('bg-sage', 'bg-warmgold', 'bg-muted/40');
           b.classList.add('bg-muted/50');
         });
-        label.textContent = pausedForBowl ? '頌缽引導中 · 音樂暫停' : '靜音中 · 開啟音樂';
-        btn.classList.remove('border-sage/45', 'bg-sageLight/85');
-        btn.classList.add('border-sand', 'bg-white/95');
+        btn.classList.remove('border-sage/50', 'bg-sageLight/95', 'border-warmgold/50', 'bg-warmgoldLight/90', 'bg-cream/85', 'text-muted', 'opacity-55', 'cursor-not-allowed', 'grayscale');
+        btn.classList.add('border-sand', 'bg-white/95', 'hover:bg-cream', 'text-ink', 'active:scale-95', 'cursor-pointer');
       }
     }
 
-    function showMusicError(msg) {
-      const pill = document.getElementById('music-error-pill');
-      const text = document.getElementById('music-error-text');
-      if (!pill || !text) return;
-      text.textContent = msg;
-      pill.classList.remove('hidden');
-      pill.classList.add('flex');
-    }
-
-    function hideMusicError() {
-      const pill = document.getElementById('music-error-pill');
-      if (!pill) return;
-      pill.classList.add('hidden');
-      pill.classList.remove('flex');
-    }
-
-    function setupAudioPlayer() {
+    // 深呼吸啟動時：鎖定並反灰音樂按鈕，若音樂播放中則平滑淡出並暫停
+    async function pauseMusicForBreath() {
       const audio = document.getElementById('bgMusic');
-      const toggleBtn = document.getElementById('music-toggle-btn');
-      if (!audio || !toggleBtn) return;
+      if (!audio) return;
+      if (breathFadeTimeout) {
+        clearTimeout(breathFadeTimeout);
+        breathFadeTimeout = null;
+      }
+      updateMusicButtonUI('breath');
+      if (!audio.paused) {
+        musicPausedByBreath = true;
+        await fadeMusicVolumeTo(0, 550);
+        if (breathActive) {
+          audio.pause();
+        }
+      }
+    }
 
+    // 深呼吸結束或中斷時：解除按鈕反灰鎖定，若先前有播放則平緩漸入恢復音樂
+    async function resumeMusicAfterBreath() {
+      const audio = document.getElementById('bgMusic');
+      if (!audio) return;
+      if (!musicPausedByBreath) {
+        updateMusicButtonUI(audio.paused ? 'paused' : 'playing');
+        return;
+      }
+      musicPausedByBreath = false;
       try {
-        audio.volume = BASE_VOLUME;
+        audio.volume = 0;
+        await audio.play();
+        updateMusicButtonUI('playing');
+        await fadeMusicVolumeTo(BASE_VOLUME, 900);
+      } catch (err) {
+        updateMusicButtonUI('paused');
+      }
+    }
+
+    // Web Audio API 低沉慢速青銅頌缽物理泛音合成器（108 / 81 / 72 Hz）
+    function playSingingBowl(phase = 'inhale') {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!bowlAudioCtx) {
+          bowlAudioCtx = new AudioCtx();
+        }
+        if (bowlAudioCtx.state === 'suspended') {
+          bowlAudioCtx.resume();
+        }
+
+        const now = bowlAudioCtx.currentTime;
+        const masterGain = bowlAudioCtx.createGain();
+        const lowpass = bowlAudioCtx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.setValueAtTime(phase === 'hold' ? 540 : 720, now);
+        lowpass.Q.setValueAtTime(0.7, now);
+
+        lowpass.connect(masterGain);
+        masterGain.connect(bowlAudioCtx.destination);
+
+        // 三段對應頻率：吸氣 108Hz ➔ 停住 81Hz（無敲擊感承接）➔ 吐氣 72Hz（沉穩落地）
+        let baseFreq = 108;
+        let beatDelta = 0.45;
+        let duration = 17.5;
+        let attackTime = 0.28;
+        let peakGain = 0.34;
+        let hasStrike = true;
+
+        if (phase === 'hold') {
+          baseFreq = 81;
+          beatDelta = 0.40;
+          duration = 12.0;
+          attackTime = 0.65; // 停住階段無敲擊感，緩緩浮現承接餘韻
+          peakGain = 0.25;
+          hasStrike = false;
+        } else if (phase === 'exhale') {
+          baseFreq = 72;
+          beatDelta = 0.42;
+          duration = 18.5;
+          attackTime = 0.36;
+          peakGain = 0.32;
+          hasStrike = true;
+        }
+
+        masterGain.gain.setValueAtTime(0.0001, now);
+        masterGain.gain.linearRampToValueAtTime(peakGain, now + attackTime);
+        masterGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        // 雙基頻微幅拍頻（產生水波般緩慢共振）+ 胸腔次低音 + 青銅泛音群
+        const partials = [
+          { freq: baseFreq, amp: 0.50, decay: duration },
+          { freq: baseFreq + beatDelta, amp: 0.46, decay: duration * 0.96 },
+          { freq: baseFreq * 0.5, amp: 0.26, decay: duration * 0.85 },
+          { freq: baseFreq * 2.756, amp: hasStrike ? 0.14 : 0.05, decay: duration * 0.48 },
+          { freq: baseFreq * 5.404, amp: hasStrike ? 0.04 : 0.01, decay: duration * 0.22 }
+        ];
+
+        partials.forEach(p => {
+          const osc = bowlAudioCtx.createOscillator();
+          const pGain = bowlAudioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(p.freq, now);
+
+          pGain.gain.setValueAtTime(0.0001, now);
+          pGain.gain.linearRampToValueAtTime(p.amp, now + attackTime);
+          pGain.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+          osc.connect(pGain);
+          pGain.connect(lowpass);
+          osc.start(now);
+          osc.stop(now + p.decay + 0.1);
+        });
+
+        // 柔軟毛氈輕觸起音（僅在吸氣與吐氣加入極低沉的包絡觸感）
+        if (hasStrike) {
+          const strikeOsc = bowlAudioCtx.createOscillator();
+          const strikeGain = bowlAudioCtx.createGain();
+          strikeOsc.type = 'triangle';
+          strikeOsc.frequency.setValueAtTime(baseFreq * 1.5, now);
+          strikeOsc.frequency.exponentialRampToValueAtTime(baseFreq, now + 0.18);
+
+          strikeGain.gain.setValueAtTime(0.0001, now);
+          strikeGain.gain.linearRampToValueAtTime(0.07, now + 0.04);
+          strikeGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+
+          strikeOsc.connect(strikeGain);
+          strikeGain.connect(lowpass);
+          strikeOsc.start(now);
+          strikeOsc.stop(now + 0.35);
+        }
       } catch (e) {}
+    }
+
+    function initMusicController() {
+      const audio = document.getElementById('bgMusic');
+      const btn = document.getElementById('music-toggle-btn');
+      const errorPill = document.getElementById('music-error-pill');
+      const errorText = document.getElementById('music-error-text');
+      if (!audio || !btn) return;
+
+      audio.volume = BASE_VOLUME;
 
       audio.addEventListener('error', () => {
-        updateMusicUI(false);
-        showMusicError('音檔無法載入，請確認網址是否可存取');
+        if (errorPill && errorText) {
+          errorText.textContent = '音檔無法載入，請確認網址是否可存取';
+          errorPill.classList.remove('hidden');
+          errorPill.classList.add('inline-flex');
+        }
+        updateMusicButtonUI('paused');
       });
 
-      audio.addEventListener('canplay', () => {
-        hideMusicError();
-      });
-
-      toggleBtn.addEventListener('click', () => {
-        musicPausedByBreath = false;
-        if (breathFadeTimeout) {
-          clearTimeout(breathFadeTimeout);
-          breathFadeTimeout = null;
+      btn.addEventListener('click', async () => {
+        if (breathActive || btn.disabled) return;
+        if (errorPill) {
+          errorPill.classList.add('hidden');
+          errorPill.classList.remove('inline-flex');
+        }
+        if (musicPausedByBreath) {
+          musicPausedByBreath = false;
         }
         if (audio.paused) {
-          hideMusicError();
           try {
             audio.volume = BASE_VOLUME;
-          } catch (e) {}
-          const playPromise = audio.play();
-          if (playPromise && typeof playPromise.then === 'function') {
-            playPromise
-              .then(() => {
-                updateMusicUI(true);
-              })
-              .catch(() => {
-                updateMusicUI(false);
-                showMusicError('瀏覽器無法播放此音檔，請確認網路或網址權限');
-              });
-          } else {
-            updateMusicUI(true);
+            await audio.play();
+            updateMusicButtonUI('playing');
+          } catch (err) {
+            if (errorPill && errorText) {
+              errorText.textContent = '瀏覽器暫時限制播放，請再點擊一次嘗試';
+              errorPill.classList.remove('hidden');
+              errorPill.classList.add('inline-flex');
+            }
+            updateMusicButtonUI('paused');
           }
         } else {
           audio.pause();
-          updateMusicUI(false);
+          updateMusicButtonUI('paused');
         }
       });
+
+      updateMusicButtonUI('paused');
     }
 
     // =========================================================================
-    // 4. 輕量提示 Toast 與彈窗工具（不使用 alert / confirm）
+    // 4. UI 輔助工具（HTML 跳脫、Toast 通知、Tip 註解彈窗、1/3 圓形 SVG）
     // =========================================================================
-    function showToast(message, icon = '✨', duration = 3200) {
+    function escapeHTML(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(message, icon = '✨') {
       const container = document.getElementById('toast-container');
       const msgEl = document.getElementById('toast-msg');
       const iconEl = document.getElementById('toast-icon');
@@ -1001,14 +1053,10 @@
       container.classList.add('opacity-100', 'translate-y-0');
 
       if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(hideToast, duration);
-    }
-
-    function hideToast() {
-      const container = document.getElementById('toast-container');
-      if (!container) return;
-      container.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
-      container.classList.remove('opacity-100', 'translate-y-0');
+      toastTimer = setTimeout(() => {
+        container.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+        container.classList.remove('opacity-100', 'translate-y-0');
+      }, 3600);
     }
 
     function openTipModal() {
@@ -1025,397 +1073,315 @@
       modal.classList.remove('flex');
     }
 
-    // =========================================================================
-    // 5. 精確 1/3 三等分圓形圖 SVG 生成器（自己 · 他人 · 情境）
-    // =========================================================================
-    function renderTriadCircleSVG(litParts, sizeClass = 'w-44 h-44', showLabels = true) {
-      const selfFill = litParts.self ? '#4E7D6E' : '#E3DDD2';      // 自己：鼠尾草綠
-      const otherFill = litParts.other ? '#C89648' : '#E3DDD2';   // 他人：暖金
-      const contextFill = litParts.context ? '#274C6B' : '#E3DDD2'; // 情境：深海藍
+    // 繪製精準 1/3 等分圓形 SVG（上：情境、右下：他人、左下：自己）
+    function renderTriadCircleSVG(litParts, sizeClass = 'w-28 h-28', showLabels = true) {
+      const contextFill = litParts.context ? '#C89648' : '#E6E0D4';
+      const otherFill = litParts.other ? '#274C6B' : '#E6E0D4';
+      const selfFill = litParts.self ? '#4E7D6E' : '#E6E0D4';
 
-      const selfText = litParts.self ? '#FFFFFF' : '#7A868B';
-      const otherText = litParts.other ? '#FFFFFF' : '#7A868B';
-      const contextText = litParts.context ? '#FFFFFF' : '#7A868B';
+      const contextText = litParts.context ? '#FFFFFF' : '#7B878B';
+      const otherText = litParts.other ? '#FFFFFF' : '#7B878B';
+      const selfText = litParts.self ? '#FFFFFF' : '#7B878B';
 
-      // 三等分圓心 (50, 50)，半徑 44：
-      // 1) 上方扇形 (情境): -150deg (11.89, 28) 到 -30deg (88.11, 28)
-      // 2) 右下扇形 (他人): -30deg (88.11, 28) 到 90deg (50, 94)
-      // 3) 左下扇形 (自己): 90deg (50, 94) 到 210deg (11.89, 28)
       return `
-        <svg viewBox="0 0 100 100" class="${sizeClass} shrink-0 select-none drop-shadow-xs" role="img" aria-label="自己、他人、情境三等分圓形圖">
-          <!-- 情境（上方 1/3） -->
-          <path d="M50 50 L11.89 28 A44 44 0 0 1 88.11 28 Z" fill="${contextFill}" stroke="#FAF7F2" stroke-width="2.6" stroke-linejoin="round" />
-          <!-- 他人（右下 1/3） -->
-          <path d="M50 50 L88.11 28 A44 44 0 0 1 50 94 Z" fill="${otherFill}" stroke="#FAF7F2" stroke-width="2.6" stroke-linejoin="round" />
-          <!-- 自己（左下 1/3） -->
-          <path d="M50 50 L50 94 A44 44 0 0 1 11.89 28 Z" fill="${selfFill}" stroke="#FAF7F2" stroke-width="2.6" stroke-linejoin="round" />
-          <!-- 中心平衡點 -->
-          <circle cx="50" cy="50" r="4.2" fill="#FAF7F2" />
+        <svg viewBox="0 0 120 120" class="${sizeClass} shrink-0 drop-shadow-xs" role="img" aria-label="自己、他人、情境三等分圓形圖">
+          <path d="M60 60 L21.89 38 A44 44 0 0 1 98.11 38 Z" fill="${contextFill}" stroke="#FAF7F2" stroke-width="3" />
+          <path d="M60 60 L98.11 38 A44 44 0 0 1 60 104 Z" fill="${otherFill}" stroke="#FAF7F2" stroke-width="3" />
+          <path d="M60 60 L60 104 A44 44 0 0 1 21.89 38 Z" fill="${selfFill}" stroke="#FAF7F2" stroke-width="3" />
+          <circle cx="60" cy="60" r="44" fill="none" stroke="#E4DDD1" stroke-width="1.5" />
           ${showLabels ? `
-            <text x="50" y="27" text-anchor="middle" font-size="9.5" font-weight="700" fill="${contextText}">情境</text>
-            <text x="69" y="65" text-anchor="middle" font-size="9.5" font-weight="700" fill="${otherText}">他人</text>
-            <text x="31" y="65" text-anchor="middle" font-size="9.5" font-weight="700" fill="${selfText}">自己</text>
+            <text x="60" y="34" text-anchor="middle" dominant-baseline="middle" fill="${contextText}" font-size="11" font-weight="700">情境</text>
+            <text x="81" y="73" text-anchor="middle" dominant-baseline="middle" fill="${otherText}" font-size="11" font-weight="700">他人</text>
+            <text x="39" y="73" text-anchor="middle" dominant-baseline="middle" fill="${selfText}" font-size="11" font-weight="700">自己</text>
           ` : ''}
         </svg>
       `;
     }
 
     // =========================================================================
-    // 6. 分頁切換邏輯
+    // 5. 主分頁切換控制
     // =========================================================================
-    function stopBreathingIfNeeded() {
-      if (breathTimer) {
-        clearInterval(breathTimer);
-        breathTimer = null;
-      }
-      if (breathActive) {
-        breathActive = false;
-        resumeMusicAfterBreath();
-      }
-    }
-
     function switchMainTab(tabId) {
-      if (tabId !== 'wizard' || state.wizard.step !== 1) {
-        stopBreathingIfNeeded();
+      if (state.mainTab === 'wizard' && tabId !== 'wizard') {
+        stopBreathing(true);
       }
       state.mainTab = tabId;
 
       document.querySelectorAll('.main-tab-btn').forEach(btn => {
-        const active = btn.dataset.mainTab === tabId;
-        if (active) {
-          btn.classList.add('bg-white', 'text-deepsea', 'shadow-xs');
-          btn.classList.remove('text-muted', 'hover:text-ink');
-        } else {
-          btn.classList.remove('bg-white', 'text-deepsea', 'shadow-xs');
-          btn.classList.add('text-muted', 'hover:text-ink');
-        }
+        const isActive = btn.dataset.mainTab === tabId;
+        btn.classList.toggle('bg-white', isActive);
+        btn.classList.toggle('text-deepsea', isActive);
+        btn.classList.toggle('shadow-xs', isActive);
+        btn.classList.toggle('text-muted', !isActive);
+        btn.classList.toggle('hover:text-ink', !isActive);
       });
 
-      document.getElementById('panel-atlas').classList.toggle('hidden', tabId !== 'atlas');
-      document.getElementById('panel-wizard').classList.toggle('hidden', tabId !== 'wizard');
-      document.getElementById('panel-compare').classList.toggle('hidden', tabId !== 'compare');
+      const panels = {
+        atlas: document.getElementById('panel-atlas'),
+        wizard: document.getElementById('panel-wizard'),
+        compare: document.getElementById('panel-compare')
+      };
+      Object.entries(panels).forEach(([key, el]) => {
+        if (!el) return;
+        if (key === tabId) {
+          el.classList.remove('hidden');
+        } else {
+          el.classList.add('hidden');
+        }
+      });
 
       if (tabId === 'atlas') renderAtlas();
       if (tabId === 'wizard') renderWizard();
       if (tabId === 'compare') renderCompare();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // =========================================================================
-    // 7. 渲染分頁一：應對姿態與資源圖鑑
+    // 6. 分頁一：應對姿態與資源圖鑑渲染
     // =========================================================================
     function renderAtlas() {
-      const selector = document.getElementById('stance-selector');
-      const card = document.getElementById('stance-detail-card');
-      if (!selector || !card) return;
+      const selectorEl = document.getElementById('stance-selector');
+      const detailEl = document.getElementById('stance-detail-card');
+      if (!selectorEl || !detailEl) return;
 
-      selector.innerHTML = STANCE_ORDER.map(id => {
-        const item = STANCES[id];
+      selectorEl.innerHTML = STANCE_ORDER.map(id => {
+        const s = STANCES[id];
         const active = state.atlasStance === id;
         return `
           <button
             type="button"
             role="tab"
-            aria-selected="${active ? 'true' : 'false'}"
+            aria-selected="${active}"
             data-atlas-stance="${id}"
-            class="flex items-center gap-3 p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+            class="text-left p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center gap-3 ${
               active
-                ? 'bg-deepsea text-white border-deepsea shadow-md'
-                : 'bg-white hover:bg-cream text-ink border-sand'
+                ? 'bg-white border-sage ring-2 ring-sage/20 shadow-sm'
+                : 'bg-cream/65 border-sand hover:bg-white text-muted hover:text-ink'
             }"
           >
-            <span class="text-xl shrink-0">${item.icon}</span>
+            <span class="text-2xl shrink-0">${s.icon}</span>
             <div class="min-w-0 flex-1">
-              <div class="flex items-baseline gap-1.5">
-                <span class="font-serif font-bold text-sm truncate">${item.shortName}</span>
-                <span class="text-[10px] ${active ? 'text-white/75' : 'text-muted'} truncate">${item.englishName}</span>
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold text-sm ${active ? 'text-deepsea' : 'text-ink'}">${s.shortName}</span>
+                <span class="text-[11px] text-muted truncate">${s.englishName}</span>
               </div>
-              <div class="text-[11px] mt-0.5 truncate ${active ? 'text-warmgoldLight font-medium' : 'text-sage font-medium'}">${item.litBadge}</div>
+              <div class="text-[11px] font-medium ${active ? 'text-sage' : 'text-muted'} truncate mt-0.5">${s.litBadge}</div>
             </div>
           </button>
         `;
       }).join('');
 
-      selector.querySelectorAll('button').forEach(btn => {
+      selectorEl.querySelectorAll('[data-atlas-stance]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.atlasStance = btn.dataset.atlasStance;
           state.atlasCuriosityOpen = false;
           state.atlasBlindSpotOpen = false;
-          state.atlasRevealedTraits = [];
           renderAtlas();
         });
       });
 
       const s = STANCES[state.atlasStance];
+      const isCongruence = s.id === 'congruence';
 
-      if (s.id === 'congruence') {
-        card.innerHTML = `
+      if (isCongruence) {
+        detailEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
-            <div class="flex flex-col md:flex-row items-center gap-6 pb-6 border-b border-sand">
-              <div class="flex flex-col items-center gap-2 shrink-0">
-                ${renderTriadCircleSVG(s.litParts, 'w-44 h-44 sm:w-48 sm:h-48', true)}
-                <span class="text-xs font-semibold text-sage">${s.triadSummary}</span>
-              </div>
-              <div class="space-y-3 flex-1 text-center md:text-left">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-5 pb-6 border-b border-sand">
+              <div class="space-y-2 flex-1">
                 <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sageLight text-sage text-xs font-bold">
                   <span>${s.icon}</span>
-                  <span>${s.shortName}（${s.englishName}）</span>
+                  <span>薩提爾理想整合狀態 · ${s.litBadge}</span>
                 </div>
-                <h3 class="font-serif text-xl sm:text-2xl font-bold text-deepsea">表裡如一的平衡整合狀態</h3>
-                <p class="font-serif text-sm sm:text-base text-ink bg-linen p-4 rounded-2xl border border-sand leading-relaxed">
-                  ${s.coreBelief}
-                </p>
+                <h3 class="font-serif text-xl sm:text-2xl font-bold text-deepsea">
+                  ${s.shortName}（${s.englishName}）
+                </h3>
+                <p class="text-xs sm:text-sm text-muted leading-relaxed">${s.triadSummary} — ${s.triadDetail}</p>
+              </div>
+              <div class="flex items-center gap-4 bg-linen rounded-2xl border border-sand p-4 shrink-0 self-start md:self-auto">
+                ${renderTriadCircleSVG(s.litParts, 'w-24 h-24 sm:w-28 sm:h-28', true)}
+                <div class="space-y-1.5 text-xs">
+                  <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-sage inline-block"></span><span class="font-semibold text-ink">自己</span></div>
+                  <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-deepsea inline-block"></span><span class="font-semibold text-ink">他人</span></div>
+                  <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-warmgold inline-block"></span><span class="font-semibold text-ink">情境</span></div>
+                </div>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="bg-linen/80 rounded-2xl p-5 border border-sand space-y-2">
-                <div class="text-xs font-bold text-deepsea">🌱 形成與運作方式</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+                <div class="text-xs font-bold text-sage">核心信念</div>
+                <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.coreBelief}</p>
+              </div>
+              <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+                <div class="text-xs font-bold text-deepsea">形成與狀態</div>
                 <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.formation}</p>
               </div>
-              <div class="bg-linen/80 rounded-2xl p-5 border border-sand space-y-2">
-                <div class="text-xs font-bold text-deepsea">🌿 外在呈現特性</div>
+              <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+                <div class="text-xs font-bold text-warmgold">外在表現</div>
                 <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.externalTraits}</p>
               </div>
             </div>
 
-            <div class="bg-sageLight/55 rounded-2xl p-5 border border-sage/25 space-y-3">
-              <div class="text-xs sm:text-sm font-bold text-sage">⚖️ 三個 1/3 的流動平衡</div>
+            <div class="bg-sageLight/60 rounded-2xl border border-sage/25 p-5 space-y-3">
+              <div class="text-xs sm:text-sm font-bold text-sage">流動的平衡感</div>
               <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.balanceDescription}</p>
               <div class="flex flex-wrap gap-2 pt-1">
-                ${s.resourceHighlights.map(tag => `
-                  <span class="px-3 py-1 rounded-full bg-white text-sage border border-sage/30 text-xs font-semibold shadow-2xs">✨ ${tag}</span>
-                `).join('')}
+                ${s.resourceHighlights.map(r => `<span class="px-3 py-1 rounded-full bg-white border border-sage/30 text-sage text-xs font-semibold">✨ ${r}</span>`).join('')}
               </div>
             </div>
 
-            <!-- 一致性中的好奇心微光 -->
-            <div class="bg-gradient-to-r from-warmgoldLight/70 via-linen to-sageLight/60 rounded-2xl p-5 border border-warmgold/30 space-y-2">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <h3 class="text-xs sm:text-sm font-bold text-amber-900 flex items-center gap-1.5">
-                  <span>🕯️</span> 保持一致性的溫柔鑰匙：好奇心
-                </h3>
-                <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white/90 text-amber-800 border border-warmgold/30">${s.curiosityTarget}</span>
-              </div>
-              <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed">${s.curiosityPrompt}</p>
+            <div class="bg-warmgoldLight/60 rounded-2xl border border-warmgold/30 p-5 space-y-2">
+              <div class="text-xs font-bold text-warmgold">🔍 好奇心微光 · ${s.curiosityTarget}</div>
+              <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.curiosityPrompt}</p>
             </div>
 
-            <!-- 給老手與實踐者的動態校準提問 -->
-            <div class="bg-deepseaLight/60 rounded-2xl p-5 border border-deepsea/20 space-y-1.5">
-              <h3 class="text-xs sm:text-sm font-bold text-deepsea flex items-center gap-1.5">
-                <span>🧭</span> 給熟手的動態校準提問
-              </h3>
+            <div class="bg-deepseaLight/60 rounded-2xl border border-deepsea/20 p-5 space-y-2">
+              <div class="text-xs font-bold text-deepsea">🪞 老手校準提問</div>
               <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed">${s.calibrationPrompt}</p>
-            </div>
-
-            <div class="pt-2 flex justify-end">
-              <button
-                type="button"
-                id="go-wizard-from-congruence"
-                class="px-5 py-2.5 rounded-2xl bg-sage hover:bg-sage/90 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all cursor-pointer"
-              >
-                前往六步自我整合引導 →
-              </button>
             </div>
           </div>
         `;
-
-        const goBtn = document.getElementById('go-wizard-from-congruence');
-        if (goBtn) {
-          goBtn.addEventListener('click', () => switchMainTab('wizard'));
-        }
         return;
       }
 
-      const allTraitsRevealed = state.atlasRevealedTraits.length === s.traits.length;
+      const allTraitsRevealed = s.traits.every((_, idx) => state.atlasRevealedTraits.includes(`${s.id}:${idx}`));
 
-      // 四種壓力應對姿態卡片
-      card.innerHTML = `
+      detailEl.innerHTML = `
         <div class="space-y-6 animate-fade-up">
-          <!-- 頂部：三等分圓形圖 + 核心信念 -->
-          <div class="flex flex-col md:flex-row items-center gap-6 pb-6 border-b border-sand">
-            <div class="flex flex-col items-center gap-2 shrink-0">
-              ${renderTriadCircleSVG(s.litParts, 'w-44 h-44 sm:w-48 sm:h-48', true)}
-              <div class="text-xs font-bold text-deepsea text-center">${s.triadSummary}</div>
-              <div class="text-[11px] text-muted text-center max-w-[220px]">${s.triadDetail}</div>
-            </div>
-
-            <div class="space-y-3 flex-1 w-full">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cream text-deepsea text-xs font-bold border border-sand">
-                  <span>${s.icon}</span>
-                  <span>${s.shortName}（${s.englishName}）</span>
-                </div>
-                <span class="text-xs font-semibold text-sage bg-sageLight px-3 py-1 rounded-full">${s.litBadge}</span>
+          <!-- 頂部：名稱、標籤與 1/3 圓形 SVG -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-5 pb-6 border-b border-sand">
+            <div class="space-y-2 flex-1">
+              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cream border border-sand text-deepsea text-xs font-bold">
+                <span>${s.icon}</span>
+                <span>生存保護姿態 · ${s.litBadge}</span>
               </div>
-
-              <div class="bg-linen rounded-2xl p-4 sm:p-5 border border-sand space-y-1.5">
-                <div class="text-[11px] font-bold tracking-wider text-muted">核心內在信念</div>
-                <p class="font-serif text-sm sm:text-base font-semibold text-ink leading-relaxed">${s.coreBelief}</p>
-              </div>
-
-              <div class="bg-sageLight/55 rounded-2xl p-4 border border-sage/25 space-y-1">
-                <div class="text-[11px] font-bold tracking-wider text-sage">🌱 健康成長方向</div>
-                <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.growthDirection}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- 日常生活口頭禪（給新手的直覺入口） -->
-          <div class="bg-cream/65 rounded-2xl p-4 sm:p-5 border border-sand space-y-2.5">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <h3 class="text-xs sm:text-sm font-bold text-deepsea flex items-center gap-1.5">
-                <span>💬</span> 日常生活口頭禪（一句話快速辨認）
+              <h3 class="font-serif text-xl sm:text-2xl font-bold text-deepsea">
+                ${s.shortName}（${s.englishName}）
               </h3>
-              <span class="text-[11px] text-muted">對心理詞彙還不熟悉？先聽聽自己常說的話</span>
+              <p class="text-xs sm:text-sm text-muted leading-relaxed">${s.triadSummary} — ${s.triadDetail}</p>
+              <div class="pt-1 flex flex-wrap gap-1.5">
+                <span class="text-[11px] font-semibold text-muted self-center mr-1">常見生活口頭禪：</span>
+                ${s.catchphrases.map(cp => `<span class="px-2.5 py-1 rounded-xl bg-linen border border-sand text-xs text-ink">${cp}</span>`).join('')}
+              </div>
             </div>
-            <div class="flex flex-wrap gap-2">
-              ${s.catchphrases.map(phrase => `
-                <span class="px-3 py-1.5 rounded-xl bg-white border border-sand text-xs sm:text-sm font-medium text-ink shadow-2xs">${phrase}</span>
-              `).join('')}
+
+            <div class="flex items-center gap-4 bg-linen rounded-2xl border border-sand p-4 shrink-0 self-start md:self-auto">
+              ${renderTriadCircleSVG(s.litParts, 'w-24 h-24 sm:w-28 sm:h-28', true)}
+              <div class="space-y-1.5 text-xs">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full ${s.litParts.self ? 'bg-sage' : 'bg-sand'} inline-block"></span>
+                  <span class="${s.litParts.self ? 'font-bold text-ink' : 'text-muted'}">自己 ${s.litParts.self ? '(亮起)' : '(待照亮)'}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full ${s.litParts.other ? 'bg-deepsea' : 'bg-sand'} inline-block"></span>
+                  <span class="${s.litParts.other ? 'font-bold text-ink' : 'text-muted'}">他人 ${s.litParts.other ? '(亮起)' : '(待照亮)'}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full ${s.litParts.context ? 'bg-warmgold' : 'bg-sand'} inline-block"></span>
+                  <span class="${s.litParts.context ? 'font-bold text-ink' : 'text-muted'}">情境 ${s.litParts.context ? '(亮起)' : '(待照亮)'}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- 形成方式與外在特性 -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-linen/75 rounded-2xl p-5 border border-sand space-y-1.5">
-              <div class="text-xs font-bold text-deepsea">🛡️ 形成方式與保護意圖</div>
+          <!-- 核心信念 / 形成原因 / 外在特徵 -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+              <div class="text-xs font-bold text-clay">壓力下的核心信念</div>
+              <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.coreBelief}</p>
+            </div>
+            <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+              <div class="text-xs font-bold text-deepsea">為什麼會發展出來</div>
               <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.formation}</p>
             </div>
-            <div class="bg-linen/75 rounded-2xl p-5 border border-sand space-y-1.5">
-              <div class="text-xs font-bold text-deepsea">👀 外在互動特性</div>
+            <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+              <div class="text-xs font-bold text-warmgold">外在行為特徵</div>
               <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.externalTraits}</p>
             </div>
           </div>
 
-          <!-- 🔍 好奇心微光提問（照亮灰暗的 1/3、2/3 或 3/3） -->
-          <div class="rounded-3xl border border-warmgold/35 bg-gradient-to-br from-warmgoldLight/75 via-linen to-white p-5 space-y-3">
+          <!-- 好奇心微光提問 + 點擊展開對照 -->
+          <div class="bg-warmgoldLight/70 rounded-2xl border border-warmgold/35 p-5 space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="text-xs sm:text-sm font-bold text-amber-900 flex items-center gap-1.5">
-                <span>🔍</span> 好奇心微光提問
-              </div>
-              <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white text-amber-800 border border-warmgold/30">${s.curiosityTarget}</span>
-            </div>
-            <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed">${s.curiosityPrompt}</p>
-            <div>
+              <div class="text-xs sm:text-sm font-bold text-warmgold">🔍 好奇心微光 · ${s.curiosityTarget}</div>
               <button
                 type="button"
                 id="atlas-curiosity-toggle"
-                class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white hover:bg-warmgoldLight border border-warmgold/35 text-xs font-semibold text-amber-900 transition-colors cursor-pointer"
+                class="px-3 py-1.5 rounded-xl bg-white border border-warmgold/40 text-xs font-semibold text-ink hover:bg-warmgoldLight transition-colors cursor-pointer"
               >
-                <span>🕯️</span>
-                <span>${state.atlasCuriosityOpen ? '收起自責轉好奇對照 ▲' : '如果我不責怪自己，試著這樣好奇問⋯ ▾'}</span>
+                ${state.atlasCuriosityOpen ? '收起好奇心對照 ▲' : '🕯️ 如果我不責怪自己，試著這樣好奇問⋯ ▼'}
               </button>
             </div>
+            <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.curiosityPrompt}</p>
+
             ${state.atlasCuriosityOpen ? `
-              <div class="bg-white/95 rounded-2xl p-4 border border-warmgold/30 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs leading-relaxed animate-fade-up">
-                <div class="bg-linen rounded-xl p-3 border border-sand space-y-1">
-                  <div class="font-bold text-muted">當慣性自責跑出來時：</div>
-                  <p class="text-muted">${s.curiosityReframe.oldHabit}</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 animate-fade-up">
+                <div class="bg-white/80 rounded-xl border border-clay/25 p-3.5 space-y-1">
+                  <div class="text-[11px] font-bold text-clay">原本習慣的自責念頭</div>
+                  <p class="text-xs text-muted leading-relaxed">${s.curiosityReframe.oldHabit}</p>
                 </div>
-                <div class="bg-warmgoldLight/60 rounded-xl p-3 border border-warmgold/30 space-y-1">
-                  <div class="font-bold text-amber-900">切換成溫柔好奇時：</div>
-                  <p class="text-ink font-medium">${s.curiosityReframe.warmShift}</p>
-                </div>
-              </div>
-            ` : ''}
-          </div>
-
-          <!-- 🪞 給熟手／老手的深度盲區鏡（可選展開） -->
-          <div class="rounded-3xl border border-deepsea/20 bg-deepseaLight/45 p-4 sm:p-5 space-y-3">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div class="space-y-0.5">
-                <div class="text-xs sm:text-sm font-bold text-deepsea flex items-center gap-1.5">
-                  <span>🪞</span> 老手／深度盲區鏡
-                </div>
-                <p class="text-[11px] sm:text-xs text-muted">如果你已經很熟悉薩提爾或 NVC，點開看看「穿著覺察外衣」的隱微防衛。</p>
-              </div>
-              <button
-                type="button"
-                id="atlas-blindspot-toggle"
-                class="self-start sm:self-auto shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                  state.atlasBlindSpotOpen
-                    ? 'bg-deepsea text-white border-deepsea shadow-xs'
-                    : 'bg-white text-deepsea border-deepsea/30 hover:bg-deepseaLight'
-                }"
-              >
-                ${state.atlasBlindSpotOpen ? '收起盲區鏡 ▲' : '照見高階偽裝 ▾'}
-              </button>
-            </div>
-            ${state.atlasBlindSpotOpen ? `
-              <div class="bg-white rounded-2xl p-4 sm:p-5 border border-deepsea/20 space-y-2.5 animate-fade-up">
-                <div class="inline-block px-2.5 py-0.5 rounded-full bg-deepseaLight text-deepsea text-[11px] font-bold">
-                  ${s.metaBlindSpot.title}
-                </div>
-                <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.metaBlindSpot.description}</p>
-                <div class="bg-linen rounded-xl p-3 border border-sand">
-                  <span class="text-xs font-bold text-deepsea">🔍 鏡面校準提問：</span>
-                  <span class="font-serif text-xs sm:text-sm text-ink font-medium">${s.metaBlindSpot.checkQuestion}</span>
+                <div class="bg-white rounded-xl border border-sage/35 p-3.5 space-y-1 shadow-2xs">
+                  <div class="text-[11px] font-bold text-sage">切換成溫柔好奇時</div>
+                  <p class="text-xs text-ink font-medium leading-relaxed">${s.curiosityReframe.warmShift}</p>
                 </div>
               </div>
             ` : ''}
           </div>
 
-          <!-- 潛在資源互動探索（點擊原本特質，浮現轉化資源與解釋） -->
+          <!-- 潛在資源：點選原本特質後，才浮現轉化資源與中性解釋 -->
           <div class="space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 class="font-serif text-sm sm:text-base font-bold text-deepsea">💎 點擊原本的保護特質，看見健康轉化後的資源</h3>
-                <p class="text-[11px] sm:text-xs text-muted mt-0.5">先接納原本的樣子，再輕輕點一下特質卡片，看看它能長成什麼內在力量。</p>
+                <h4 class="font-serif text-base font-bold text-deepsea">💎 潛在中性資源（點擊原本特質，看見轉化後的力量）</h4>
+                <p class="text-xs text-muted mt-0.5">${s.growthDirection}</p>
               </div>
               <button
                 type="button"
                 id="atlas-reveal-all-btn"
-                class="px-3 py-1.5 rounded-xl border border-sand bg-linen hover:bg-cream text-xs font-semibold text-deepsea transition-colors cursor-pointer shrink-0"
+                class="px-3 py-1.5 rounded-xl border border-sand bg-linen hover:bg-cream text-xs font-semibold text-ink transition-colors cursor-pointer"
               >
-                ${allTraitsRevealed ? '全部收合' : '全部展開'}
+                ${allTraitsRevealed ? '收合全部資源' : '展開全部資源'}
               </button>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               ${s.traits.map((t, idx) => {
-                const revealed = state.atlasRevealedTraits.includes(idx);
+                const key = `${s.id}:${idx}`;
+                const revealed = state.atlasRevealedTraits.includes(key);
                 return `
                   <div
-                    class="rounded-2xl border transition-all duration-200 ${
+                    data-reveal-trait="${key}"
+                    role="button"
+                    tabindex="0"
+                    class="rounded-2xl border p-4 transition-all duration-200 cursor-pointer select-none ${
                       revealed
-                        ? 'bg-sageLight/55 border-sage/35 shadow-xs'
-                        : 'bg-white border-sand hover:border-warmgold/60 hover:bg-cream/50'
+                        ? 'bg-sageLight/55 border-sage/40 shadow-xs'
+                        : 'bg-linen border-sand hover:bg-cream/80'
                     }"
                   >
-                    <button
-                      type="button"
-                      data-reveal-trait="${idx}"
-                      aria-expanded="${revealed ? 'true' : 'false'}"
-                      class="w-full p-4 flex items-center justify-between gap-2 text-left cursor-pointer"
-                    >
-                      <div class="flex items-center gap-2.5 flex-wrap">
-                        <span class="px-2.5 py-1 rounded-xl bg-linen border border-sand text-xs sm:text-sm font-semibold text-ink">${t.raw}</span>
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2.5 py-1 rounded-lg bg-white border border-sand text-xs font-semibold text-ink">${t.raw}</span>
                         ${revealed ? `
                           <span class="text-sage font-bold text-xs">➔</span>
-                          <span class="px-2.5 py-1 rounded-xl bg-sage text-white text-xs sm:text-sm font-bold shadow-2xs">✨ ${t.transformed}</span>
-                        ` : `
-                          <span class="text-xs text-muted">點擊看見轉化資源</span>
-                        `}
-                      </div>
-                      <span class="text-xs font-bold ${revealed ? 'text-sage' : 'text-muted'} shrink-0">${revealed ? '▲' : '▾'}</span>
-                    </button>
-
-                    ${revealed ? `
-                      <div class="px-4 pb-4 pt-1 border-t border-sage/15 space-y-2 animate-fade-up">
-                        <p class="text-xs sm:text-sm text-ink leading-relaxed">${t.explanation}</p>
-                        ${t.hasTip ? `
-                          <div>
+                          <span class="px-2.5 py-1 rounded-lg bg-sage text-white text-xs font-bold">✨ ${t.transformed}</span>
+                          ${t.hasTip ? `
                             <button
                               type="button"
-                              class="open-tip-modal-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-deepseaLight hover:bg-deepsea text-deepsea hover:text-white text-[11px] font-bold transition-colors cursor-pointer"
-                            >
-                              <span>[i]</span>
-                              <span>規則、原則與一致性的差別？</span>
-                            </button>
-                          </div>
+                              data-open-tip="true"
+                              class="px-2 py-0.5 rounded-full bg-deepseaLight border border-deepsea/25 text-deepsea text-[11px] font-bold hover:bg-deepsea hover:text-white transition-colors cursor-pointer"
+                              aria-label="查看原則與一致性註解"
+                            >[i]</button>
+                          ` : ''}
                         ` : ''}
                       </div>
+                      <span class="text-[11px] font-medium ${revealed ? 'text-sage' : 'text-muted'} shrink-0">
+                        ${revealed ? '已照亮' : '點擊看見資源 ➔'}
+                      </span>
+                    </div>
+                    ${revealed ? `
+                      <p class="mt-2.5 pt-2.5 border-t border-sage/20 text-xs text-ink leading-relaxed animate-fade-up">
+                        ${t.explanation}
+                      </p>
                     ` : ''}
                   </div>
                 `;
@@ -1423,157 +1389,224 @@
             </div>
           </div>
 
-          <!-- 前往整合行動按鈕 -->
-          <div class="pt-3 border-t border-sand flex flex-wrap items-center justify-between gap-3">
-            <span class="text-xs text-muted">想把「${s.shortName}」背後的中性資源整合進當下的情境嗎？</span>
+          <!-- 老手／深度盲區鏡（可選展開） -->
+          <div class="bg-deepseaLight/45 rounded-2xl border border-deepsea/20 p-4 sm:p-5 space-y-3">
             <button
               type="button"
-              id="start-integration-from-atlas"
+              id="atlas-blindspot-toggle"
+              class="w-full flex items-center justify-between gap-3 text-left cursor-pointer"
+            >
+              <span class="text-xs sm:text-sm font-bold text-deepsea">🪞 如果你已經很熟悉這套模式：看看最容易忽略的高階盲區</span>
+              <span class="text-xs font-semibold text-deepsea shrink-0">${state.atlasBlindSpotOpen ? '收起 ▲' : '展開看看 ▼'}</span>
+            </button>
+            ${state.atlasBlindSpotOpen ? `
+              <div class="pt-3 border-t border-deepsea/15 space-y-2.5 animate-fade-up">
+                <div class="text-xs font-bold text-deepsea">${s.metaBlindSpot.title}</div>
+                <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.metaBlindSpot.description}</p>
+                <div class="bg-white/90 rounded-xl border border-deepsea/20 p-3 text-xs text-deepsea font-medium leading-relaxed">
+                  🔍 校準問自己：${s.metaBlindSpot.checkQuestion}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- 快速進入步驟引導 -->
+          <div class="pt-2 flex justify-end">
+            <button
+              type="button"
+              id="atlas-start-wizard-btn"
               class="px-5 py-2.5 rounded-2xl bg-sage hover:bg-sage/90 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all active:scale-95 cursor-pointer"
             >
-              帶著「${s.shortName}」進入六步整合 →
+              用「${s.shortName}」進入六步自我整合引導 →
             </button>
           </div>
         </div>
       `;
 
-      document.getElementById('atlas-curiosity-toggle').addEventListener('click', () => {
-        state.atlasCuriosityOpen = !state.atlasCuriosityOpen;
-        renderAtlas();
-      });
+      const curiosityBtn = document.getElementById('atlas-curiosity-toggle');
+      if (curiosityBtn) {
+        curiosityBtn.addEventListener('click', () => {
+          state.atlasCuriosityOpen = !state.atlasCuriosityOpen;
+          renderAtlas();
+        });
+      }
 
-      document.getElementById('atlas-blindspot-toggle').addEventListener('click', () => {
-        state.atlasBlindSpotOpen = !state.atlasBlindSpotOpen;
-        renderAtlas();
-      });
-
-      document.getElementById('atlas-reveal-all-btn').addEventListener('click', () => {
-        if (allTraitsRevealed) {
-          state.atlasRevealedTraits = [];
-        } else {
-          state.atlasRevealedTraits = s.traits.map((_, i) => i);
-        }
-        renderAtlas();
-      });
-
-      card.querySelectorAll('[data-reveal-trait]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx = Number(btn.dataset.revealTrait);
-          if (state.atlasRevealedTraits.includes(idx)) {
-            state.atlasRevealedTraits = state.atlasRevealedTraits.filter(i => i !== idx);
+      const revealAllBtn = document.getElementById('atlas-reveal-all-btn');
+      if (revealAllBtn) {
+        revealAllBtn.addEventListener('click', () => {
+          if (allTraitsRevealed) {
+            state.atlasRevealedTraits = state.atlasRevealedTraits.filter(k => !k.startsWith(`${s.id}:`));
           } else {
-            state.atlasRevealedTraits.push(idx);
+            s.traits.forEach((_, idx) => {
+              const key = `${s.id}:${idx}`;
+              if (!state.atlasRevealedTraits.includes(key)) {
+                state.atlasRevealedTraits.push(key);
+              }
+            });
           }
           renderAtlas();
         });
+      }
+
+      detailEl.querySelectorAll('[data-reveal-trait]').forEach(card => {
+        const toggleReveal = () => {
+          const key = card.dataset.revealTrait;
+          if (state.atlasRevealedTraits.includes(key)) {
+            state.atlasRevealedTraits = state.atlasRevealedTraits.filter(k => k !== key);
+          } else {
+            state.atlasRevealedTraits.push(key);
+          }
+          renderAtlas();
+        };
+        card.addEventListener('click', toggleReveal);
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleReveal();
+          }
+        });
       });
 
-      card.querySelectorAll('.open-tip-modal-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+      detailEl.querySelectorAll('[data-open-tip]').forEach(tipBtn => {
+        tipBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           openTipModal();
         });
       });
 
-      document.getElementById('start-integration-from-atlas').addEventListener('click', () => {
-        state.wizard.stanceId = s.id;
-        state.wizard.step = 1;
-        state.wizard.breathCompleted = false;
-        state.wizard.breathAfterFeel = '';
-        state.wizard.claimedTraits = [];
-        state.wizard.curiositySwitched = false;
-        state.wizard.interrupted = false;
-        state.wizard.blindSpotOpen = false;
-        state.wizard.nacDeclaration = '';
-        state.wizard.nvcRequest = '';
-        switchMainTab('wizard');
-      });
+      const blindspotBtn = document.getElementById('atlas-blindspot-toggle');
+      if (blindspotBtn) {
+        blindspotBtn.addEventListener('click', () => {
+          state.atlasBlindSpotOpen = !state.atlasBlindSpotOpen;
+          renderAtlas();
+        });
+      }
+
+      const startWizardBtn = document.getElementById('atlas-start-wizard-btn');
+      if (startWizardBtn) {
+        startWizardBtn.addEventListener('click', () => {
+          state.wizard.stanceId = s.id;
+          state.wizard.step = 1;
+          switchMainTab('wizard');
+        });
+      }
     }
 
     // =========================================================================
-    // 8. 渲染分頁二：六步自我整合引導
+    // 7. 分頁二：六步自我整合引導（呼吸停止控制、身體路徑、語音引導、分色共鳴）
     // =========================================================================
-    const WIZARD_STEP_META = [
-      { step: 1, short: '1. 引導', title: '引導（Guidance）' },
-      { step: 2, short: '2. 覺察', title: '覺察（Awareness）' },
-      { step: 3, short: '3. 理解', title: '理解（Understanding）' },
-      { step: 4, short: '4. 內化', title: '內化（Internalization）' },
-      { step: 5, short: '5. 轉變', title: '轉變（Transformation）' },
-      { step: 6, short: '6. 重新看待', title: '重新看待資源（Reframing）' }
-    ];
+    function stopBreathing(shouldResumeMusic = true) {
+      if (breathTimer) {
+        clearInterval(breathTimer);
+        breathTimer = null;
+      }
+      if (breathMusicResumeTimeout) {
+        clearTimeout(breathMusicResumeTimeout);
+        breathMusicResumeTimeout = null;
+      }
+      breathActive = false;
+      cancelBreathVoice();
+      if (shouldResumeMusic) {
+        resumeMusicAfterBreath();
+      }
+    }
+
+    function parseBreathRhythm(rhythmStr) {
+      const parts = (rhythmStr || '8-4-8').split('-').map(n => parseInt(n, 10));
+      if (parts.length === 3 && parts.every(n => !isNaN(n) && n > 0)) {
+        return { inhale: parts[0], hold: parts[1], exhale: parts[2] };
+      }
+      return { inhale: 8, hold: 4, exhale: 8 };
+    }
 
     function renderWizard() {
       const w = state.wizard;
-      if (w.step !== 1) {
-        stopBreathingIfNeeded();
+      if (w.step !== 1 && breathActive) {
+        stopBreathing(true);
       }
-      const s = STANCES[w.stanceId] || STANCES.placater;
-      const body = document.getElementById('wizard-body');
-      const badge = document.getElementById('wizard-step-badge');
+
+      const currentMeta = WIZARD_STEP_META[w.step - 1] || WIZARD_STEP_META[0];
+      const badgeEl = document.getElementById('wizard-step-badge');
       const titleEl = document.getElementById('wizard-step-title');
       const barsEl = document.getElementById('wizard-progress-bars');
       const labelsEl = document.getElementById('wizard-step-labels');
+      const bodyEl = document.getElementById('wizard-body');
       const prevBtn = document.getElementById('wizard-prev-btn');
       const nextBtn = document.getElementById('wizard-next-btn');
 
-      if (!body || !badge || !titleEl || !barsEl || !labelsEl || !prevBtn || !nextBtn) return;
+      if (!badgeEl || !titleEl || !barsEl || !labelsEl || !bodyEl || !prevBtn || !nextBtn) return;
 
-      const currentMeta = WIZARD_STEP_META[w.step - 1] || WIZARD_STEP_META[0];
-      badge.textContent = `步驟 ${w.step} / 6`;
+      badgeEl.textContent = `步驟 ${w.step} / 6`;
       titleEl.textContent = currentMeta.title;
 
       barsEl.innerHTML = WIZARD_STEP_META.map(m => {
-        const done = m.step < w.step;
-        const current = m.step === w.step;
+        const done = m.num < w.step;
+        const current = m.num === w.step;
         return `
           <button
             type="button"
-            data-jump-step="${m.step}"
-            title="${m.title}"
-            aria-label="跳至${m.title}"
-            class="h-2 rounded-full transition-all duration-300 cursor-pointer ${
-              current ? 'bg-sage ring-2 ring-sage/25' : done ? 'bg-sage/55 hover:bg-sage/75' : 'bg-sand hover:bg-muted/35'
+            data-jump-step="${m.num}"
+            aria-label="前往第 ${m.num} 步：${m.label}"
+            class="h-2.5 rounded-full transition-all cursor-pointer ${
+              current ? 'bg-sage ring-2 ring-sage/25' : done ? 'bg-sage/55 hover:bg-sage/80' : 'bg-sand hover:bg-sand/80'
             }"
           ></button>
         `;
       }).join('');
 
       labelsEl.innerHTML = WIZARD_STEP_META.map(m => {
-        const active = m.step === w.step;
-        return `<span class="${active ? 'text-sage font-bold' : ''}">${m.short}</span>`;
+        const current = m.num === w.step;
+        return `
+          <button
+            type="button"
+            data-jump-step="${m.num}"
+            class="cursor-pointer transition-colors ${current ? 'text-sage font-bold' : 'text-muted hover:text-ink'}"
+          >${m.num}. ${m.label}</button>
+        `;
       }).join('');
 
-      barsEl.querySelectorAll('[data-jump-step]').forEach(btn => {
+      document.querySelectorAll('[data-jump-step]').forEach(btn => {
         btn.addEventListener('click', () => {
-          w.step = Number(btn.dataset.jumpStep);
-          renderWizard();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          const targetStep = parseInt(btn.dataset.jumpStep, 10);
+          if (!isNaN(targetStep)) {
+            if (w.step === 1 && targetStep !== 1) stopBreathing(true);
+            w.step = targetStep;
+            renderWizard();
+          }
         });
       });
 
       prevBtn.disabled = w.step === 1;
-      nextBtn.textContent = w.step === 6 ? '完成探索 · 回到圖鑑' : '下一步 →';
+      if (w.step === 6) {
+        nextBtn.textContent = '回到步驟 1 ↻';
+      } else {
+        nextBtn.textContent = '下一步 →';
+      }
 
-      // --- 步驟 1：引導 (方向一：呼吸前後覺察對照 + 6-4-6 深呼吸 + 頌缽聲) ---
+      const stance = STANCES[w.stanceId] || STANCES.placater;
+
+      // -----------------------------------------------------------------------
+      // 步驟 1：引導（Guidance）— 姿態初探 + 8-4-8 / 10-4-10 / 6-4-6 頌缽與語音深呼吸
+      // -----------------------------------------------------------------------
       if (w.step === 1) {
-        const focusMeta = BREATH_FOCUS_OPTIONS.find(f => f.label === w.breathFocus) || BREATH_FOCUS_OPTIONS[4];
-        const afterMeta = BREATH_AFTER_OPTIONS.find(a => a.label === w.breathAfterFeel);
+        const rhythm = parseBreathRhythm(w.breathRhythm);
+        const totalCycleSec = rhythm.inhale + rhythm.hold + rhythm.exhale;
+        const totalDurationSec = totalCycleSec * 3;
+        const availableVoices = getAvailableZhVoices();
+        const { voice: activeVoice, isMale: activeIsMale } = selectDeepMaleVoice();
 
-        body.innerHTML = `
+        bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
-            <div class="space-y-2">
-              <h2 class="font-serif text-lg sm:text-xl font-bold text-deepsea">先停下來，安頓自己，再用好奇心陪著此刻的感覺</h2>
+            <div class="space-y-1.5">
+              <h3 class="font-serif text-lg sm:text-xl font-bold text-deepsea">1. 引導（Guidance）— 停下來，帶著好奇回到身體</h3>
               <p class="text-xs sm:text-sm text-muted leading-relaxed">
-                在開始整理之前，邀請你先選一個最貼近現在的身體／心理感受焦點，接著跟著頌缽聲做三次「6–4–6 深呼吸」（呼吸時背景音樂會暫時停下來，把安靜的空間留給頌缽與你自己）。
+                在分析發生什麼事之前，先給自己一分鐘的安靜空間。接下來，邀請你戴上「好奇而不批判」的眼鏡來看待自己。
               </p>
             </div>
 
-            <!-- 方向一（呼吸前）：選擇此刻想陪的感覺 -->
-            <div class="bg-cream/65 rounded-2xl border border-sand p-4 space-y-2.5">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs sm:text-sm font-bold text-deepsea">1. 呼吸前，此刻比較想陪著哪一種感覺？</span>
-                <span class="text-[11px] text-muted">沒有對錯，只是選一個安放注意力的起點</span>
-              </div>
+            <!-- 呼吸前設定覺察焦點（方向一） -->
+            <div class="bg-linen rounded-2xl border border-sand p-4 sm:p-5 space-y-3">
+              <div class="text-xs font-bold text-deepsea">呼吸前，現在比較想陪著身體或心裡的哪一種感覺？</div>
               <div class="flex flex-wrap gap-2">
                 ${BREATH_FOCUS_OPTIONS.map(opt => {
                   const active = w.breathFocus === opt.label;
@@ -1581,110 +1614,195 @@
                     <button
                       type="button"
                       data-breath-focus="${opt.label}"
-                      aria-pressed="${active ? 'true' : 'false'}"
-                      class="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${
+                      class="px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                         active
-                          ? 'bg-deepsea text-white border-deepsea shadow-xs'
-                          : 'bg-white hover:bg-warmgoldLight/70 text-ink border-sand'
+                          ? 'bg-warmgold text-white border-warmgold shadow-2xs'
+                          : 'bg-white border-sand text-ink hover:bg-cream'
                       }"
-                    >
-                      ${opt.label}
-                    </button>
+                    >${opt.label}</button>
                   `;
                 }).join('')}
               </div>
             </div>
 
-            <!-- 6-4-6 深呼吸互動區（進行時暫停背景音樂，以深沉頌缽取代） -->
-            <div class="bg-linen rounded-3xl border border-sand p-5 sm:p-6 space-y-5">
-              <div class="flex flex-col sm:flex-row items-center gap-6">
-                <div class="relative w-32 h-32 flex items-center justify-center shrink-0">
+            <!-- 呼吸節奏、頌缽與語音引導控制面板 -->
+            <div class="bg-gradient-to-br from-cream/80 via-linen to-sageLight/55 rounded-3xl border border-sand p-5 sm:p-6 space-y-5">
+              <!-- 節奏選擇 + 語音與頌缽測試 -->
+              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-sand/80">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs font-bold text-deepsea mr-1">呼吸節奏：</span>
+                  <button
+                    type="button"
+                    data-rhythm="6-4-6"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      w.breathRhythm === '6-4-6' ? 'bg-deepsea text-white border-deepsea' : 'bg-white border-sand text-ink hover:bg-cream'
+                    }"
+                  >6-4-6 秒（溫和基礎）</button>
+                  <button
+                    type="button"
+                    data-rhythm="8-4-8"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      w.breathRhythm === '8-4-8' ? 'bg-deepsea text-white border-deepsea' : 'bg-white border-sand text-ink hover:bg-cream'
+                    }"
+                  >8-4-8 秒（深沉呼吸）</button>
+                  <button
+                    type="button"
+                    data-rhythm="10-4-10"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      w.breathRhythm === '10-4-10' ? 'bg-deepsea text-white border-deepsea' : 'bg-white border-sand text-ink hover:bg-cream'
+                    }"
+                  >10-4-10 秒（深沉慢呼吸）</button>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    id="voice-toggle-btn"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      w.voiceGuideEnabled ? 'bg-sage text-white border-sage' : 'bg-white border-sand text-muted hover:text-ink'
+                    }"
+                  >${w.voiceGuideEnabled ? '🗣️ 語音引導：開啟' : '🔇 語音引導：關閉'}</button>
+                  <button
+                    type="button"
+                    id="test-bowl-btn"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-warmgold/50 bg-warmgoldLight/90 hover:bg-warmgoldLight text-ink transition-all cursor-pointer"
+                  >🔔 試聽一聲頌缽</button>
+                </div>
+              </div>
+
+              <!-- 語音音色切換與試聽列（嚴格僅保留 Microsoft YunJhe 與 HsiaoChen） -->
+              <div class="bg-white/75 rounded-2xl border border-sand p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div class="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                  <span class="text-xs font-semibold text-deepsea shrink-0">引導音色：</span>
+                  ${availableVoices.length > 0 ? `
+                    <select
+                      id="voice-select"
+                      aria-label="選擇中文語音音色"
+                      class="text-xs rounded-xl border border-sand bg-linen px-2.5 py-1.5 text-ink max-w-full sm:max-w-xs truncate focus:outline-none focus:ring-2 focus:ring-sage/30"
+                    >
+                      ${availableVoices.map(v => {
+                        const isSel = activeVoice && v.voiceURI === activeVoice.voiceURI;
+                        const labelTag = MALE_VOICE_REGEX.test(v.name) ? '沉穩男聲' : '溫潤女聲';
+                        return `<option value="${escapeHTML(v.voiceURI)}" ${isSel ? 'selected' : ''}>[${labelTag}] ${escapeHTML(v.name)}</option>`;
+                      }).join('')}
+                    </select>
+                  ` : `
+                    <span class="text-[11px] text-muted">目前瀏覽器未偵測到 Microsoft YunJhe / HsiaoChen 線上自然語音，將使用預設沉穩語調輔助</span>
+                  `}
+                </div>
+                <button
+                  type="button"
+                  id="test-voice-btn"
+                  class="px-3 py-1.5 rounded-xl bg-linen hover:bg-cream border border-sand text-xs font-semibold text-deepsea transition-colors cursor-pointer shrink-0"
+                >🔉 試聽引導語音</button>
+              </div>
+
+              <!-- 呼吸圓環與身體感知路徑引導 -->
+              <div class="flex flex-col items-center text-center space-y-5 py-2">
+                <!-- 身體路徑進度點：鼻腔 -> 肺部胸口 -> 丹田核心 -> 全身回饋 -->
+                <div id="breath-body-path" class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-[11px] font-semibold text-muted">
+                  <span data-path-stage="0" class="px-2.5 py-1 rounded-full bg-white border border-sand transition-all">1. 鼻腔與氣息</span>
+                  <span>➔</span>
+                  <span data-path-stage="1" class="px-2.5 py-1 rounded-full bg-white border border-sand transition-all">2. 肺部・胸口</span>
+                  <span>➔</span>
+                  <span data-path-stage="2" class="px-2.5 py-1 rounded-full bg-white border border-sand transition-all">3. 丹田・核心</span>
+                  <span>➔</span>
+                  <span data-path-stage="3" class="px-2.5 py-1 rounded-full bg-white border border-sand transition-all">4. 全身回饋</span>
+                </div>
+
+                <!-- 呼吸動態圓環 -->
+                <div class="relative w-44 h-44 sm:w-48 sm:h-48 flex items-center justify-center">
                   <div
                     id="breath-orb"
-                    class="breath-orb w-24 h-24 rounded-full bg-gradient-to-br from-sage/30 via-sageLight to-warmgold/25 border-2 border-sage/40 flex items-center justify-center shadow-inner"
+                    class="breath-orb w-36 h-36 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br from-sage/30 via-warmgold/20 to-deepsea/25 border-2 border-sage/50 shadow-[0_0_32px_rgba(78,125,110,0.18)] flex flex-col items-center justify-center px-3"
                   >
-                    <span id="breath-phase-short" class="font-serif text-sm font-bold text-deepsea">準備好</span>
+                    <span id="breath-phase-text" class="font-serif text-lg sm:text-xl font-bold text-deepsea">
+                      ${w.breathCompleted ? '已完成' : '準備好了'}
+                    </span>
+                    <span id="breath-timer-text" class="text-xs sm:text-sm font-semibold text-sage mt-1">
+                      ${w.breathCompleted ? '順著身體安靜待一會兒' : `3 次 ${w.breathRhythm} 循環（共 ${totalDurationSec} 秒）`}
+                    </span>
                   </div>
                 </div>
-                <div class="flex-1 text-center sm:text-left space-y-2.5">
-                  <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                    <span id="breath-cycle-badge" class="px-2.5 py-0.5 rounded-full bg-white border border-sand text-[11px] font-bold text-sage">3 次深呼吸 · 6-4-6 節奏</span>
-                    <span class="text-[11px] text-amber-900 bg-warmgoldLight/80 px-2.5 py-0.5 rounded-full border border-warmgold/30 font-medium">🔔 呼吸時音樂暫停，改以頌缽引導</span>
-                  </div>
-                  <p id="breath-guide-text" class="font-serif text-sm sm:text-base font-semibold text-ink leading-relaxed">
-                    準備陪著「${w.breathFocus}」一起深呼吸：吸氣 6 秒、停住 4 秒、吐氣 6 秒。
-                  </p>
-                  <div class="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                    <button
-                      type="button"
-                      id="breath-toggle-btn"
-                      class="px-5 py-2 rounded-2xl bg-sage hover:bg-sage/90 text-white text-xs sm:text-sm font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
-                    >
-                      ${breathActive ? '暫停深呼吸' : w.breathCompleted ? '再做一次 3 次深呼吸' : '開始 3 次深呼吸'}
-                    </button>
-                    <button
-                      type="button"
-                      id="bowl-preview-btn"
-                      class="px-3.5 py-2 rounded-2xl bg-white hover:bg-warmgoldLight border border-warmgold/40 text-amber-900 text-xs font-semibold transition-all active:scale-95 cursor-pointer"
-                    >
-                      🔔 試聽一聲頌缽
-                    </button>
-                  </div>
+
+                <!-- 身體感覺文字引導區 -->
+                <p id="breath-guide-line" class="font-serif text-sm sm:text-base text-ink max-w-lg leading-relaxed min-h-[3.2rem] flex items-center justify-center px-2">
+                  ${w.breathCompleted
+                    ? '不需要用大腦分析剛剛做對了沒有，只感覺此刻身體給你的真實回饋。'
+                    : '按下開始後，背景音樂會平緩暫停，由低沉頌缽聲接手陪伴。吸氣時請放細、放慢，不用一次吸太滿。'}
+                </p>
+
+                <!-- 開始 / 暫停呼吸按鈕 -->
+                <div class="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    id="breath-start-btn"
+                    class="px-6 py-3 rounded-2xl bg-sage hover:bg-sage/90 text-white text-sm font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    ${breathActive ? '⏸ 暫停深呼吸' : (w.breathCompleted ? '↻ 再做一次 3 次深呼吸' : '▶ 開始 3 次深呼吸')}
+                  </button>
                 </div>
               </div>
 
-              <!-- 方向一（呼吸後）：完成 3 次深呼吸後出現的非評斷覺察回饋 -->
-              <div id="breath-after-panel" class="${w.breathCompleted ? '' : 'hidden'} pt-4 border-t border-sand space-y-3 animate-fade-up">
-                <div class="text-xs sm:text-sm font-bold text-sage">2. 剛剛在頌缽與呼吸裡陪著「${w.breathFocus}」待了一會兒，現在感覺如何？（點選紀錄）</div>
-                <div class="flex flex-wrap gap-2">
-                  ${BREATH_AFTER_OPTIONS.map(opt => {
-                    const active = w.breathAfterFeel === opt.label;
-                    return `
-                      <button
-                        type="button"
-                        data-breath-after="${opt.label}"
-                        aria-pressed="${active ? 'true' : 'false'}"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${
-                          active
-                            ? 'bg-sage text-white border-sage shadow-xs'
-                            : 'bg-white hover:bg-sageLight/60 text-ink border-sand'
-                        }"
-                      >
-                        <span>${opt.icon}</span>
-                        <span>${opt.label}</span>
-                      </button>
-                    `;
-                  }).join('')}
-                </div>
-                ${afterMeta ? `
-                  <div class="bg-white/90 rounded-2xl p-3.5 border border-sage/25 text-xs sm:text-sm text-ink leading-relaxed animate-fade-up">
-                    <span class="font-bold text-sage">🌿 覺察回應：</span>${afterMeta.reply}
+              <!-- 呼吸後非評斷覺察回饋（方向一） -->
+              ${w.breathCompleted ? `
+                <div class="bg-white rounded-2xl border border-sage/35 p-4 sm:p-5 space-y-3 animate-fade-up">
+                  <div class="text-xs sm:text-sm font-bold text-sage">🌿 呼吸結束了，現在感覺一下身體與心裡的狀態（非評斷核對）：</div>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    ${BREATH_AFTER_OPTIONS.map(opt => {
+                      const picked = w.breathAfterFeel === opt.id;
+                      return `
+                        <button
+                          type="button"
+                          data-breath-after="${opt.id}"
+                          class="p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                            picked
+                              ? 'bg-sageLight border-sage ring-2 ring-sage/20'
+                              : 'bg-linen border-sand hover:bg-cream'
+                          }"
+                        >
+                          <div class="text-xs sm:text-sm font-bold text-ink">${opt.icon} ${opt.label}</div>
+                        </button>
+                      `;
+                    }).join('')}
                   </div>
-                ` : ''}
-              </div>
+                  ${w.breathAfterFeel ? (() => {
+                    const found = BREATH_AFTER_OPTIONS.find(o => o.id === w.breathAfterFeel);
+                    return found ? `
+                      <p class="text-xs sm:text-sm text-deepsea bg-sageLight/45 rounded-xl p-3 border border-sage/20 leading-relaxed animate-fade-up">
+                        ${found.reply}
+                      </p>
+                    ` : '';
+                  })() : ''}
+                </div>
+              ` : ''}
             </div>
 
-            <!-- 選擇當下最接近的應對姿態 -->
-            <div class="space-y-3">
-              <div class="text-xs sm:text-sm font-bold text-deepsea">在最近讓你覺得緊繃或在意的情境中，你覺得自己比較接近哪一種保護姿態？</div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <!-- 選擇本次探索的姿態（呼吸安頓後再選擇） -->
+            <div class="space-y-2.5">
+              <div class="text-xs font-bold text-deepsea">安頓下來後，此刻較容易看見自己啟動了哪一種保護姿態？</div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 ${FOUR_COPING_IDS.map(id => {
                   const item = STANCES[id];
-                  const active = w.stanceId === id;
+                  const selected = w.stanceId === id;
                   return `
                     <button
                       type="button"
                       data-wiz-stance="${id}"
-                      class="flex flex-col items-center text-center gap-2 p-4 rounded-2xl border transition-all cursor-pointer ${
-                        active
-                          ? 'bg-sageLight/75 border-sage shadow-sm ring-1 ring-sage'
-                          : 'bg-white border-sand hover:bg-cream/70'
+                      class="p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        selected
+                          ? 'bg-sageLight/80 border-sage ring-2 ring-sage/20 shadow-2xs'
+                          : 'bg-linen border-sand hover:bg-cream'
                       }"
                     >
-                      ${renderTriadCircleSVG(item.litParts, 'w-14 h-14', false)}
-                      <div class="font-serif text-sm font-bold text-deepsea">${item.shortName}</div>
-                      <div class="text-[11px] text-muted leading-snug">${item.triadSummary}</div>
-                      <div class="text-[10px] text-sage font-medium bg-white/80 px-2 py-0.5 rounded-lg border border-sand/80 leading-snug">${item.catchphrases[0]}</div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xl">${item.icon}</span>
+                        <div>
+                          <div class="text-sm font-bold ${selected ? 'text-deepsea' : 'text-ink'}">${item.shortName}</div>
+                          <div class="text-[11px] text-muted">${item.englishName}</div>
+                        </div>
+                      </div>
+                      <div class="mt-1.5 text-[11px] text-muted line-clamp-1">${item.catchphrases[0]}</div>
                     </button>
                   `;
                 }).join('')}
@@ -1693,346 +1811,452 @@
           </div>
         `;
 
-        body.querySelectorAll('[data-breath-focus]').forEach(btn => {
+        // 步驟 1 事件綁定：呼吸焦點、6-4-6 / 8-4-8 / 10-4-10 節奏切換、語音與頌缽試聽、深呼吸計時
+        bodyEl.querySelectorAll('[data-breath-focus]').forEach(btn => {
           btn.addEventListener('click', () => {
+            if (breathActive) stopBreathing(true);
             w.breathFocus = btn.dataset.breathFocus;
-            if (!breathActive) {
-              renderWizard();
-            }
+            renderWizard();
           });
         });
 
-        body.querySelectorAll('[data-breath-after]').forEach(btn => {
+        bodyEl.querySelectorAll('[data-rhythm]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            if (breathActive) stopBreathing(true);
+            w.breathRhythm = btn.dataset.rhythm;
+            w.breathCompleted = false;
+            renderWizard();
+          });
+        });
+
+        const voiceToggleBtn = document.getElementById('voice-toggle-btn');
+        if (voiceToggleBtn) {
+          voiceToggleBtn.addEventListener('click', () => {
+            w.voiceGuideEnabled = !w.voiceGuideEnabled;
+            if (!w.voiceGuideEnabled) cancelBreathVoice();
+            if (breathActive) {
+              voiceToggleBtn.textContent = w.voiceGuideEnabled ? '🗣️ 語音引導：開啟' : '🔇 語音引導：關閉';
+              voiceToggleBtn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                w.voiceGuideEnabled ? 'bg-sage text-white border-sage' : 'bg-white border-sand text-muted hover:text-ink'
+              }`;
+            } else {
+              renderWizard();
+            }
+          });
+        }
+
+        const voiceSelect = document.getElementById('voice-select');
+        if (voiceSelect) {
+          voiceSelect.addEventListener('change', () => {
+            w.selectedVoiceURI = voiceSelect.value;
+          });
+        }
+
+        const testVoiceBtn = document.getElementById('test-voice-btn');
+        if (testVoiceBtn) {
+          testVoiceBtn.addEventListener('click', () => {
+            try {
+              if (!('speechSynthesis' in window)) {
+                showToast('目前的瀏覽器不支援語音合成功能', '🔇');
+                return;
+              }
+              window.speechSynthesis.cancel();
+              const utter = new SpeechSynthesisUtterance('吸氣，感受空氣輕輕經過鼻腔與肺部，順著身體往下走進丹田，不用大腦想，只是安靜感覺身體的回饋。');
+              const { voice, isMale } = selectDeepMaleVoice();
+              if (voice) utter.voice = voice;
+              utter.lang = voice ? voice.lang : 'zh-TW';
+              utter.rate = voice ? (isMale ? 0.65 : 0.76) : 0.68;
+              utter.pitch = voice ? (isMale ? 0.86 : 0.94) : 0.62;
+              utter.volume = 0.90;
+              window.speechSynthesis.speak(utter);
+            } catch (e) {}
+          });
+        }
+
+        const testBowlBtn = document.getElementById('test-bowl-btn');
+        if (testBowlBtn) {
+          testBowlBtn.addEventListener('click', () => {
+            playSingingBowl('inhale');
+          });
+        }
+
+        const breathStartBtn = document.getElementById('breath-start-btn');
+        if (breathStartBtn) {
+          breathStartBtn.addEventListener('click', () => {
+            if (breathActive) {
+              stopBreathing(true);
+              renderWizard();
+              return;
+            }
+
+            if (breathMusicResumeTimeout) {
+              clearTimeout(breathMusicResumeTimeout);
+              breathMusicResumeTimeout = null;
+            }
+
+            breathActive = true;
+            w.breathCompleted = false;
+            pauseMusicForBreath();
+            breathStartBtn.textContent = '⏸ 暫停深呼吸';
+
+            const r = parseBreathRhythm(w.breathRhythm);
+            const cycleDur = r.inhale + r.hold + r.exhale;
+            const totalDur = cycleDur * 3;
+            const focusObj = BREATH_FOCUS_OPTIONS.find(o => o.label === w.breathFocus) || BREATH_FOCUS_OPTIONS[4];
+            let elapsed = 0;
+
+            const highlightPathStage = (activeStages) => {
+              bodyEl.querySelectorAll('[data-path-stage]').forEach(el => {
+                const idx = parseInt(el.dataset.pathStage, 10);
+                const on = activeStages.includes(idx);
+                el.classList.toggle('bg-sage', on);
+                el.classList.toggle('text-white', on);
+                el.classList.toggle('border-sage', on);
+                el.classList.toggle('shadow-2xs', on);
+                el.classList.toggle('bg-white', !on);
+                el.classList.toggle('border-sand', !on);
+              });
+            };
+
+            const applyBreathTick = (sec) => {
+              const cycleIdx = Math.min(2, Math.floor(sec / cycleDur));
+              const secInCycle = sec % cycleDur;
+              const orbEl = document.getElementById('breath-orb');
+              const phaseEl = document.getElementById('breath-phase-text');
+              const timerEl = document.getElementById('breath-timer-text');
+              const guideEl = document.getElementById('breath-guide-line');
+              if (!orbEl || !phaseEl || !timerEl || !guideEl) return;
+
+              let phase = 'inhale';
+              let rem = r.inhale - secInCycle;
+              let phaseStart = (secInCycle === 0);
+
+              if (secInCycle >= r.inhale && secInCycle < r.inhale + r.hold) {
+                phase = 'hold';
+                rem = (r.inhale + r.hold) - secInCycle;
+                phaseStart = (secInCycle === r.inhale);
+              } else if (secInCycle >= r.inhale + r.hold) {
+                phase = 'exhale';
+                rem = cycleDur - secInCycle;
+                phaseStart = (secInCycle === r.inhale + r.hold);
+              }
+
+              let guideText = '';
+              let voiceText = '';
+              let stages = [0];
+
+              if (cycleIdx === 0) {
+                if (phase === 'inhale') {
+                  stages = [0, 1];
+                  guideText = `第 1 次吸氣：感受空氣輕輕經過鼻腔、來到肺部與胸口；${focusObj.inhaleCue}。`;
+                  voiceText = `第 1 次吸氣，感受空氣經過鼻腔，來到肺部與胸口。${focusObj.inhaleCue}。`;
+                } else if (phase === 'hold') {
+                  stages = [1];
+                  guideText = '停住感受：不急著用大腦想，只是陪這份感覺在胸口安靜停留 4 秒⋯';
+                  voiceText = '輕輕停住，用感覺陪著胸口，不用大腦想。';
+                } else {
+                  stages = [1, 2];
+                  guideText = '第 1 次吐氣：順著身體慢慢吐出氣息，感覺胸口的重量向下流動，經過腹部來到丹田⋯';
+                  voiceText = '慢慢吐氣，順著身體往下流，經過胸口，沉進丹田。';
+                }
+              } else if (cycleIdx === 1) {
+                if (phase === 'inhale') {
+                  stages = [2];
+                  guideText = '第 2 次吸氣：感受空氣經過肺部，繼續往下走進丹田與核心，感覺腹部隨著氣息柔和撐開⋯';
+                  voiceText = '第 2 次吸氣，感受空氣經過肺部，深深走進丹田與核心。';
+                } else if (phase === 'hold') {
+                  stages = [2];
+                  guideText = `停住感受：${focusObj.holdCue}，感受身體此刻最真實的反應⋯`;
+                  voiceText = `${focusObj.holdCue}，感覺身體此刻的回應。`;
+                } else {
+                  stages = [2, 3];
+                  guideText = '第 2 次吐氣：把多餘的用力順著吐氣交還給地面，感覺肩膀、背部與四肢慢慢鬆開⋯';
+                  voiceText = '緩緩吐氣，感受肩膀與全身慢慢鬆開，把用力交還給地面。';
+                }
+              } else {
+                if (phase === 'inhale') {
+                  stages = [3];
+                  guideText = '第 3 次吸氣：順著身體，不用大腦想——感受空氣經過鼻腔、肺、丹田，流向全身每一處⋯';
+                  voiceText = '最後一次吸氣，順著身體，感受氣息流經肺與丹田，充滿全身。';
+                } else if (phase === 'hold') {
+                  stages = [3];
+                  guideText = '停住感受：安靜感受全身在呼吸裡的細微回饋，此刻的自己是安全且被陪著的⋯';
+                  voiceText = '輕輕停住，感受全身在呼吸裡的回饋，此刻是安全的。';
+                } else {
+                  stages = [3];
+                  guideText = '第 3 次吐氣：跟隨低沉的頌缽餘韻緩緩呼出，安靜體會此刻身體留給你的空間⋯';
+                  voiceText = '最後一次吐氣，順著身體緩緩呼出，安靜感受此刻的自己。';
+                }
+              }
+
+              const phaseLabel = phase === 'inhale' ? '吸氣' : phase === 'hold' ? '停住' : '吐氣';
+              phaseEl.textContent = `${phaseLabel} · ${rem} 秒`;
+              timerEl.textContent = `第 ${cycleIdx + 1} / 3 次循環（${w.breathRhythm}）`;
+              guideEl.textContent = guideText;
+              highlightPathStage(stages);
+
+              if (phase === 'inhale') {
+                orbEl.style.transitionDuration = `${r.inhale}s`;
+                orbEl.style.transform = 'scale(1.18)';
+              } else if (phase === 'hold') {
+                orbEl.style.transitionDuration = '0.6s';
+                orbEl.style.transform = 'scale(1.18)';
+              } else {
+                orbEl.style.transitionDuration = `${r.exhale}s`;
+                orbEl.style.transform = 'scale(0.92)';
+              }
+
+              if (phaseStart) {
+                playSingingBowl(phase);
+                speakBreathVoice(voiceText);
+              }
+            };
+
+            applyBreathTick(0);
+
+            breathTimer = setInterval(() => {
+              elapsed += 1;
+              if (elapsed >= totalDur) {
+                clearInterval(breathTimer);
+                breathTimer = null;
+                breathActive = false;
+                w.breathCompleted = true;
+                cancelBreathVoice();
+                renderWizard();
+                // 讓第 3 次吐氣的低沉頌缽餘韻自然消散後，再平緩漸入恢復背景音樂
+                breathMusicResumeTimeout = setTimeout(() => {
+                  breathMusicResumeTimeout = null;
+                  resumeMusicAfterBreath();
+                }, 1600);
+                return;
+              }
+              applyBreathTick(elapsed);
+            }, 1000);
+          });
+        }
+
+        bodyEl.querySelectorAll('[data-breath-after]').forEach(btn => {
           btn.addEventListener('click', () => {
             w.breathAfterFeel = btn.dataset.breathAfter;
             renderWizard();
           });
         });
 
-        document.getElementById('bowl-preview-btn').addEventListener('click', () => {
-          playSingingBowl('deep');
-          showToast('深沉慢速頌缽共振中（108 Hz 緩慢微拍頻）⋯⋯', '🔔', 3000);
-        });
-
-        const breathBtn = document.getElementById('breath-toggle-btn');
-        const orb = document.getElementById('breath-orb');
-        const phaseShort = document.getElementById('breath-phase-short');
-        const cycleBadge = document.getElementById('breath-cycle-badge');
-        const guideText = document.getElementById('breath-guide-text');
-
-        breathBtn.addEventListener('click', () => {
-          if (breathActive) {
-            stopBreathingIfNeeded();
-            breathBtn.textContent = '開始 3 次深呼吸';
-            phaseShort.textContent = '已暫停';
-            orb.style.transform = 'scale(1)';
-            cycleBadge.textContent = '3 次深呼吸 · 6-4-6 節奏';
-            guideText.textContent = '隨時準備好都可以再次開始，背景音樂也已柔和恢復。';
-            return;
-          }
-
-          breathActive = true;
-          w.breathCompleted = false;
-          const afterPanel = document.getElementById('breath-after-panel');
-          if (afterPanel) afterPanel.classList.add('hidden');
-
-          // 暫停背景音樂，以頌缽聲取代
-          pauseMusicForBreath();
-          breathBtn.textContent = '暫停深呼吸';
-
-          const currentFocus = BREATH_FOCUS_OPTIONS.find(f => f.label === w.breathFocus) || BREATH_FOCUS_OPTIONS[4];
-          const totalCycles = 3;
-          let cycle = 1;
-          let secInCycle = 0; // 0..15 (0-5吸氣6秒, 6-9停住4秒, 10-15吐氣6秒)
-
-          function updateBreathFrame() {
-            if (!breathActive) return;
-            cycleBadge.textContent = `第 ${cycle} / ${totalCycles} 次呼吸 · 頌缽陪伴中`;
-
-            if (secInCycle < 6) {
-              const remain = 6 - secInCycle;
-              phaseShort.textContent = `吸氣 ${remain}s`;
-              if (secInCycle === 0) {
-                playSingingBowl('deep');
-                orb.style.transform = 'scale(1.26)';
-              }
-              if (cycle === 1) {
-                guideText.textContent = `第 1 次（回到身體）：緩緩吸氣 ${remain} 秒——讓氣息告訴身體現在是安全的`;
-              } else if (cycle === 2) {
-                guideText.textContent = `第 2 次（陪著感覺）：吸氣 ${remain} 秒——${currentFocus.inhaleCue}`;
-              } else {
-                guideText.textContent = `第 3 次（溫柔同在）：吸氣 ${remain} 秒——感覺有一個溫柔的自己，正在陪著此刻有感覺的自己`;
-              }
-            } else if (secInCycle < 10) {
-              const remain = 10 - secInCycle;
-              phaseShort.textContent = `停住 ${remain}s`;
-              if (secInCycle === 6) {
-                playSingingBowl('hold');
-              }
-              guideText.textContent = `第 ${cycle} 次：輕輕停住 ${remain} 秒——${currentFocus.holdCue}`;
-            } else {
-              const remain = 16 - secInCycle;
-              phaseShort.textContent = `吐氣 ${remain}s`;
-              if (secInCycle === 10) {
-                playSingingBowl('exhale');
-                orb.style.transform = 'scale(0.92)';
-              }
-              guideText.textContent = `第 ${cycle} 次：隨著低沉頌缽餘韻緩緩吐氣（${remain} 秒）⋯⋯把多餘的用力交還給地面`;
-            }
-          }
-
-          updateBreathFrame();
-          breathTimer = setInterval(() => {
-            if (!breathActive) return;
-            secInCycle += 1;
-            if (secInCycle >= 16) {
-              secInCycle = 0;
-              cycle += 1;
-              if (cycle > totalCycles) {
-                stopBreathingIfNeeded();
-                playSingingBowl('close');
-                w.breathCompleted = true;
-                renderWizard();
-                const doneGuide = document.getElementById('breath-guide-text');
-                const doneBadge = document.getElementById('breath-cycle-badge');
-                const donePhase = document.getElementById('breath-phase-short');
-                if (doneBadge) doneBadge.textContent = '✨ 3 次頌缽呼吸已完成';
-                if (donePhase) donePhase.textContent = '完成了';
-                if (doneGuide) doneGuide.textContent = '很棒，收尾頌缽的餘韻正慢慢散開，請在下方記錄此刻的覺察變化。';
-                return;
-              }
-            }
-            updateBreathFrame();
-          }, 1000);
-        });
-
-        body.querySelectorAll('[data-wiz-stance]').forEach(btn => {
+        bodyEl.querySelectorAll('[data-wiz-stance]').forEach(btn => {
           btn.addEventListener('click', () => {
             w.stanceId = btn.dataset.wizStance;
-            w.claimedTraits = [];
-            w.curiositySwitched = false;
-            w.interrupted = false;
-            w.blindSpotOpen = false;
-            w.nacDeclaration = '';
-            w.nvcRequest = '';
             renderWizard();
           });
         });
       }
 
-      // --- 步驟 2：覺察 (Awareness｜好奇心切換 + NVC 觀察 + 身體氣象與感受) ---
-      if (w.step === 2) {
-        body.innerHTML = `
+      // -----------------------------------------------------------------------
+      // 步驟 2：覺察（Awareness）— 好奇心開關 + 客觀觀察 + 身體氣象共鳴分色
+      // -----------------------------------------------------------------------
+      else if (w.step === 2) {
+        syncWizardFeelings();
+        const afterInfo = BREATH_AFTER_OPTIONS.find(o => o.id === w.breathAfterFeel);
+        const allFeelingTags = [
+          ...NVC_FEELING_TAGS,
+          ...w.manualFeelings.filter(f => !NVC_FEELING_TAGS.includes(f))
+        ];
+
+        bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
             <div class="space-y-1.5">
-              <h2 class="font-serif text-lg sm:text-xl font-bold text-deepsea">從自我批判切換到好奇心：看見客觀事實與真實感受</h2>
+              <h3 class="font-serif text-lg sm:text-xl font-bold text-deepsea">2. 覺察（Awareness）— 客觀事實與表層背後的真實感受</h3>
               <p class="text-xs sm:text-sm text-muted leading-relaxed">
-                在非暴力溝通（NVC）裡，我們先練習把「評價與自責」放下來，單純看清發生了什麼事，以及身體與心裡真實感受到什麼。
+                帶著剛剛呼吸後的穩定，用非暴力溝通（NVC）的鏡頭純粹看見事實，並透過身體訊號認出真實的情緒感受。
               </p>
             </div>
 
-            ${w.breathCompleted || w.breathAfterFeel ? `
-              <div class="bg-sageLight/55 rounded-2xl border border-sage/25 px-4 py-3 flex items-start gap-2.5 text-xs sm:text-sm text-ink">
-                <span class="text-base leading-none mt-0.5">🔔</span>
-                <p class="leading-relaxed">
-                  剛剛在頌缽與呼吸裡，你陪著「<strong class="text-deepsea">${w.breathFocus}</strong>」待了一會兒${w.breathAfterFeel ? `（感覺：<strong class="text-sage">${w.breathAfterFeel}</strong>）` : ''}；現在帶著這份安穩，一起看看下面更貼近哪幾種感受詞吧。
-                </p>
+            ${w.breathCompleted ? `
+              <div class="bg-sageLight/55 rounded-2xl border border-sage/30 px-4 py-3 text-xs sm:text-sm text-deepsea flex items-start gap-2.5">
+                <span class="text-base shrink-0">🌿</span>
+                <div>
+                  剛剛呼吸時你陪著「<strong>${escapeHTML(w.breathFocus)}</strong>」待了一會兒${afterInfo ? `，感覺「<strong>${afterInfo.label}</strong>」` : ''}；現在看看心裡與身體更接近哪些感受呢？
+                </div>
               </div>
             ` : ''}
 
-            <!-- 好奇心開關（自責轉好奇） -->
-            <div class="bg-gradient-to-r from-warmgoldLight/75 via-linen to-white rounded-3xl border border-warmgold/35 p-4 sm:p-5 space-y-3">
+            <!-- 覺察前好奇心開關 -->
+            <div class="bg-warmgoldLight/65 rounded-2xl border border-warmgold/35 p-4 sm:p-5 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="text-xs sm:text-sm font-bold text-amber-900 flex items-center gap-1.5">
-                  <span>🕯️</span> 覺察前的「好奇心開關」
-                </div>
+                <div class="text-xs font-bold text-warmgold">🕯️ 覺察前的好奇心開關（把自責轉為理解）</div>
                 <button
                   type="button"
-                  id="wiz-curiosity-switch-btn"
-                  aria-pressed="${w.curiositySwitched ? 'true' : 'false'}"
-                  class="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  id="wiz-curiosity-switch"
+                  class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                     w.curiositySwitched
-                      ? 'bg-warmgold text-white border-warmgold shadow-xs'
-                      : 'bg-white hover:bg-warmgoldLight text-amber-900 border-warmgold/40'
+                      ? 'bg-warmgold text-white border-warmgold shadow-2xs'
+                      : 'bg-white border-warmgold/45 text-ink hover:bg-warmgoldLight'
                   }"
-                >
-                  ${w.curiositySwitched ? '✨ 已切換為好奇視角（點此切回）' : '🔍 點一下，把自責點亮成好奇'}
-                </button>
+                >${w.curiositySwitched ? '✨ 已開啟好奇視角' : '切換成友善偵探的好奇問句'}</button>
               </div>
-              ${w.curiositySwitched ? `
-                <div class="bg-white rounded-2xl p-3.5 border border-warmgold/30 space-y-1 animate-fade-up">
-                  <div class="text-[11px] font-bold text-amber-900">切換成溫柔好奇的聲音：</div>
-                  <p class="font-serif text-xs sm:text-sm text-ink font-medium leading-relaxed">${s.curiosityReframe.warmShift}</p>
-                </div>
-              ` : `
-                <div class="bg-white/75 rounded-2xl p-3.5 border border-sand space-y-1">
-                  <div class="text-[11px] font-bold text-muted">當「${s.shortName}」的自責慣性跑出來時，腦袋可能會說：</div>
-                  <p class="text-xs sm:text-sm text-muted leading-relaxed">${s.curiosityReframe.oldHabit}</p>
-                </div>
-              `}
+              <p class="text-xs sm:text-sm text-ink leading-relaxed">
+                ${w.curiositySwitched
+                  ? stance.curiosityReframe.warmShift
+                  : `舊慣性常會想：${stance.curiosityReframe.oldHabit}（點右上按鈕，試著換一個不評判的視角看看）`}
+              </p>
             </div>
 
-            <!-- 1. 客觀觀察（NVC Observation） -->
+            <!-- NVC 客觀觀察 -->
             <div class="space-y-2.5">
-              <label for="wiz-observation" class="block text-xs sm:text-sm font-bold text-ink">
-                1. 客觀觀察（只寫下像攝影機拍到的畫面，暫時不加「他總是／我太糟」的評價）：
+              <label for="wiz-observation" class="block text-xs sm:text-sm font-bold text-deepsea">
+                1. 發生了什麼具體事件？（NVC 客觀觀察：像攝影機一樣只描述事實，不帶評斷）
               </label>
-              <div class="flex flex-wrap items-center gap-1.5">
-                <span class="text-[11px] text-muted">不知道怎麼起頭？試著套用常見情境：</span>
-                ${s.obsPresets.map((preset, idx) => `
+              <div class="flex flex-wrap gap-2">
+                ${stance.obsPresets.map((preset, idx) => `
                   <button
                     type="button"
                     data-obs-preset="${idx}"
-                    class="px-2.5 py-1 rounded-lg bg-cream hover:bg-warmgoldLight border border-sand text-[11px] font-medium text-deepsea transition-colors cursor-pointer"
-                  >
-                    範例 ${idx + 1}
-                  </button>
+                    class="text-left px-3 py-1.5 rounded-xl bg-linen hover:bg-cream border border-sand text-[11px] sm:text-xs text-muted hover:text-ink transition-colors cursor-pointer"
+                  >帶入常見情境 ${idx + 1}</button>
                 `).join('')}
               </div>
               <textarea
                 id="wiz-observation"
-                rows="3"
-                placeholder="例如：今天開會時對方打斷了我的發言兩次，我當時心頭一緊、立刻說沒關係你先講..."
-                class="w-full p-3.5 rounded-2xl border border-sand bg-linen/60 focus:bg-white focus:border-sage focus:outline-none text-xs sm:text-sm leading-relaxed"
-              >${w.observation}</textarea>
+                rows="2"
+                placeholder="例如：當對方在會議中直接打斷我的報告並提出質疑時⋯"
+                class="w-full rounded-2xl border border-sand bg-linen/70 focus:bg-white px-4 py-3 text-xs sm:text-sm text-ink focus:outline-none focus:ring-2 focus:ring-sage/35"
+              >${escapeHTML(w.observation)}</textarea>
             </div>
 
-            <!-- 身體氣象翻譯 + NVC 感受（單色深淺共鳴＋身體訊號開關） -->
-            <div class="space-y-3">
-              <div class="text-xs sm:text-sm font-bold text-ink">2. 表層應對背後的真實情緒感受（可複選）：</div>
+            <!-- 身體氣象複選開關 ➔ 單色深淺共鳴視覺 -->
+            <div class="space-y-4">
+              <div class="space-y-1.5">
+                <div class="text-xs sm:text-sm font-bold text-deepsea">2. 表層應對背後的真實情緒感受（可複選）</div>
+                <p class="text-xs text-muted">
+                  如果一時說不上來，可以先點選下方的<strong>「身體氣象」開關（可複選與取消）</strong>，系統會自動標記對應情緒；當多處身體訊號指向同一個情緒時，顏色會自動加深顯示共鳴強度。
+                </p>
+              </div>
 
-              <div class="bg-sageLight/55 rounded-2xl p-3.5 sm:p-4 border border-sage/25 space-y-2.5">
-                <div class="flex flex-wrap items-center justify-between gap-1.5">
-                  <span class="text-xs font-bold text-sage">📡 對情緒詞還不熟悉？可複選開啟或取消身體訊號：</span>
-                  <span class="text-[11px] text-muted">再點一次已亮起的按鈕即可取消該組標記</span>
-                </div>
-                <div class="flex flex-wrap gap-1.5">
+              <!-- 身體氣象開關列 -->
+              <div class="bg-linen rounded-2xl border border-sand p-4 space-y-2.5">
+                <div class="text-[11px] font-bold text-sage">🫀 身體氣象線索（點一下開啟標記，再點一次取消）：</div>
+                <div class="flex flex-wrap gap-2">
                   ${BODY_SIGNALS.map((bs, idx) => {
-                    const isSignalActive = w.activeBodySignals.includes(idx);
+                    const active = w.activeBodySignals.includes(idx);
                     return `
                       <button
                         type="button"
                         data-body-signal="${idx}"
-                        aria-pressed="${isSignalActive ? 'true' : 'false'}"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] sm:text-xs font-medium transition-all cursor-pointer text-left ${
-                          isSignalActive
-                            ? 'bg-sage text-white border-sage shadow-xs'
-                            : 'bg-white hover:bg-warmgoldLight/70 text-ink border-sage/25'
+                        title="${escapeHTML(bs.hintText)}"
+                        class="px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                          active
+                            ? 'bg-sage text-white border-sage shadow-2xs font-semibold'
+                            : 'bg-white border-sand text-ink hover:bg-cream'
                         }"
-                      >
-                        <span aria-hidden="true">${isSignalActive ? '✓' : '+'}</span>
-                        <span>${bs.signal}</span>
-                      </button>
+                      >${active ? '✓ ' : ''}${bs.signal}</button>
                     `;
                   }).join('')}
                 </div>
               </div>
 
-              <!-- 單色深淺圖例說明 -->
-              <div class="flex flex-wrap items-center gap-3 px-1 text-[11px] text-muted">
-                <span class="inline-flex items-center gap-1.5">
-                  <span class="w-3 h-3 rounded-full bg-warmgoldLight border border-warmgold/60 inline-block"></span>
-                  <span>柔霧淺色：單一訊號或手動點選</span>
-                </span>
-                <span class="inline-flex items-center gap-1.5">
-                  <span class="w-3 h-3 rounded-full bg-[#B57B2A] inline-block"></span>
-                  <span class="font-medium text-amber-900">飽和深色：2 處以上身體訊號共鳴聚焦</span>
-                </span>
+              <!-- 單色深淺情緒感受標籤列 -->
+              <div class="space-y-2">
+                <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+                  <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-warmgoldLight border border-warmgold/60 inline-block"></span>單一訊號／手動點選</span>
+                  <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-warmgold inline-block"></span>多處身體訊號共鳴（核心焦點）</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  ${allFeelingTags.map(tag => {
+                    const bodyCount = getFeelingBodyCount(tag);
+                    const isSuppressed = w.suppressedFeelings.includes(tag);
+                    const isSelected = !isSuppressed && (bodyCount > 0 || w.manualFeelings.includes(tag));
+                    const isResonant = isSelected && bodyCount >= 2;
+
+                    let btnClass = 'bg-linen border-sand text-ink hover:bg-cream';
+                    if (isResonant) {
+                      btnClass = 'bg-warmgold border-warmgold text-white font-bold shadow-sm';
+                    } else if (isSelected) {
+                      btnClass = 'bg-warmgoldLight border-warmgold/60 text-ink font-semibold';
+                    }
+
+                    return `
+                      <button
+                        type="button"
+                        data-feeling-tag="${escapeHTML(tag)}"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-xs sm:text-sm transition-all cursor-pointer ${btnClass}"
+                      >
+                        <span>${isSelected ? '✓ ' : ''}${escapeHTML(tag)}</span>
+                        ${isResonant ? `<span class="px-1.5 py-0.5 rounded-full bg-white/25 text-[10px] font-bold">${bodyCount}處共鳴</span>` : ''}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+
+                <div class="flex gap-2 max-w-sm pt-1">
+                  <input
+                    id="custom-feeling-input"
+                    type="text"
+                    value="${escapeHTML(w.customFeeling)}"
+                    placeholder="想補充其他感受詞⋯"
+                    class="flex-1 rounded-xl border border-sand bg-linen px-3 py-2 text-xs text-ink focus:bg-white focus:outline-none focus:ring-2 focus:ring-warmgold/40"
+                  />
+                  <button
+                    type="button"
+                    id="add-custom-feeling-btn"
+                    class="px-3.5 py-2 rounded-xl bg-warmgold hover:bg-warmgold/90 text-white text-xs font-semibold cursor-pointer shrink-0"
+                  >加入</button>
+                </div>
               </div>
-
-              <div class="flex flex-wrap gap-2">
-                ${NVC_FEELING_TAGS.map(tag => {
-                  const bodyCount = getFeelingBodyCount(tag);
-                  const isManual = w.manualFeelings.includes(tag);
-                  const isSuppressed = w.suppressedFeelings.includes(tag);
-                  const isActive = !isSuppressed && (bodyCount > 0 || isManual);
-                  const isResonant = isActive && bodyCount >= 2;
-
-                  let btnClass = 'bg-white text-ink border-sand hover:bg-cream';
-                  if (isResonant) {
-                    btnClass = 'bg-[#B57B2A] text-white border-[#96621C] shadow-sm ring-2 ring-warmgold/30';
-                  } else if (isActive) {
-                    btnClass = 'bg-warmgoldLight text-amber-900 border-warmgold/60 hover:bg-warmgold/20';
-                  }
-
-                  return `
-                    <button
-                      type="button"
-                      data-feeling="${tag}"
-                      aria-pressed="${isActive ? 'true' : 'false'}"
-                      class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${btnClass}"
-                    >
-                      <span>${tag}</span>
-                      ${isResonant ? `<span class="px-1.5 py-0.5 rounded-full bg-white/25 text-[10px] font-bold leading-none">${bodyCount}處共鳴</span>` : ''}
-                    </button>
-                  `;
-                }).join('')}
-              </div>
-              <input
-                id="wiz-custom-feeling"
-                type="text"
-                value="${w.customFeeling}"
-                placeholder="或寫下其他真實感受（例如：受限、疲倦、孤立、擔憂...）"
-                class="w-full mt-2 p-3 rounded-2xl border border-sand bg-linen/60 focus:bg-white focus:border-warmgold focus:outline-none text-xs sm:text-sm"
-              />
             </div>
           </div>
         `;
 
-        document.getElementById('wiz-curiosity-switch-btn').addEventListener('click', () => {
-          w.curiositySwitched = !w.curiositySwitched;
-          renderWizard();
-        });
+        const curSwitchBtn = document.getElementById('wiz-curiosity-switch');
+        if (curSwitchBtn) {
+          curSwitchBtn.addEventListener('click', () => {
+            w.curiositySwitched = !w.curiositySwitched;
+            renderWizard();
+          });
+        }
 
-        body.querySelectorAll('[data-body-signal]').forEach(btn => {
+        const obsInput = document.getElementById('wiz-observation');
+        if (obsInput) {
+          obsInput.addEventListener('input', () => {
+            w.observation = obsInput.value;
+          });
+        }
+
+        bodyEl.querySelectorAll('[data-obs-preset]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const idx = Number(btn.dataset.bodySignal);
-            const bs = BODY_SIGNALS[idx];
-            if (w.activeBodySignals.includes(idx)) {
-              // 取消該身體訊號開關，並清理不再有任何訊號對應的抑制清單
-              w.activeBodySignals = w.activeBodySignals.filter(i => i !== idx);
-              w.suppressedFeelings = w.suppressedFeelings.filter(tag => getFeelingBodyCount(tag) > 0);
-              syncWizardFeelings();
-              showToast(`已取消「${bs.signal}」的感受標記`, '📡', 2600);
-            } else {
-              // 開啟該身體訊號開關，並解除對應感受的抑制狀態
-              w.activeBodySignals.push(idx);
-              w.suppressedFeelings = w.suppressedFeelings.filter(tag => !bs.hints.includes(tag));
-              syncWizardFeelings();
-              showToast(`${bs.hintText}（已開啟標記：${bs.hints.join('、')}）`, '📡', 3800);
-            }
+            const idx = parseInt(btn.dataset.obsPreset, 10);
+            w.observation = stance.obsPresets[idx] || '';
             renderWizard();
           });
         });
 
-        body.querySelectorAll('[data-obs-preset]').forEach(btn => {
+        bodyEl.querySelectorAll('[data-body-signal]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const preset = s.obsPresets[Number(btn.dataset.obsPreset)];
-            w.observation = preset;
-            document.getElementById('wiz-observation').value = preset;
+            const idx = parseInt(btn.dataset.bodySignal, 10);
+            if (w.activeBodySignals.includes(idx)) {
+              w.activeBodySignals = w.activeBodySignals.filter(i => i !== idx);
+            } else {
+              w.activeBodySignals.push(idx);
+              const hints = BODY_SIGNALS[idx]?.hints || [];
+              w.suppressedFeelings = w.suppressedFeelings.filter(f => !hints.includes(f));
+            }
+            syncWizardFeelings();
+            renderWizard();
           });
         });
 
-        document.getElementById('wiz-observation').addEventListener('input', (e) => {
-          w.observation = e.target.value;
-        });
-
-        body.querySelectorAll('[data-feeling]').forEach(btn => {
+        bodyEl.querySelectorAll('[data-feeling-tag]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const tag = btn.dataset.feeling;
+            const tag = btn.dataset.feelingTag;
             const bodyCount = getFeelingBodyCount(tag);
-            const isManual = w.manualFeelings.includes(tag);
-            const isSuppressed = w.suppressedFeelings.includes(tag);
-            const isActive = !isSuppressed && (bodyCount > 0 || isManual);
+            const selected = !w.suppressedFeelings.includes(tag) && (bodyCount > 0 || w.manualFeelings.includes(tag));
 
-            if (isActive) {
+            if (selected) {
               w.manualFeelings = w.manualFeelings.filter(f => f !== tag);
-              if (bodyCount > 0 && !isSuppressed) {
+              if (bodyCount > 0 && !w.suppressedFeelings.includes(tag)) {
                 w.suppressedFeelings.push(tag);
               }
             } else {
               w.suppressedFeelings = w.suppressedFeelings.filter(f => f !== tag);
-              if (bodyCount === 0 && !isManual) {
+              if (bodyCount === 0 && !w.manualFeelings.includes(tag)) {
                 w.manualFeelings.push(tag);
               }
             }
@@ -2041,139 +2265,204 @@
           });
         });
 
-        document.getElementById('wiz-custom-feeling').addEventListener('input', (e) => {
-          w.customFeeling = e.target.value;
-        });
+        const customFeelingInput = document.getElementById('custom-feeling-input');
+        const addCustomFeelingBtn = document.getElementById('add-custom-feeling-btn');
+        if (customFeelingInput) {
+          customFeelingInput.addEventListener('input', () => {
+            w.customFeeling = customFeelingInput.value;
+          });
+          customFeelingInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addCustomFeelingBtn?.click();
+            }
+          });
+        }
+        if (addCustomFeelingBtn) {
+          addCustomFeelingBtn.addEventListener('click', () => {
+            const val = (w.customFeeling || '').trim();
+            if (!val) return;
+            w.suppressedFeelings = w.suppressedFeelings.filter(f => f !== val);
+            if (!w.manualFeelings.includes(val)) {
+              w.manualFeelings.push(val);
+            }
+            w.customFeeling = '';
+            syncWizardFeelings();
+            renderWizard();
+          });
+        }
       }
 
-      // --- 步驟 3：理解 (Understanding｜冰山保護意圖與 NVC 需要) ---
-      if (w.step === 3) {
-        body.innerHTML = `
+      // -----------------------------------------------------------------------
+      // 步驟 3：理解（Understanding）— 冰山下的保護意圖與 NVC 渴望需要
+      // -----------------------------------------------------------------------
+      else if (w.step === 3) {
+        const allNeeds = [...NVC_NEED_TAGS, ...w.needs.filter(n => !NVC_NEED_TAGS.includes(n))];
+        bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
             <div class="space-y-1.5">
-              <h2 class="font-serif text-lg sm:text-xl font-bold text-deepsea">望進冰山底層：理解這個保護姿態在守護什麼需要</h2>
-              <p class="text-xs sm:text-sm text-muted leading-relaxed">每個姿態都不是來搗亂的，而是帶著一份古老的保護善意。</p>
+              <h3 class="font-serif text-lg sm:text-xl font-bold text-deepsea">3. 理解（Understanding）— 望進冰山底層的渴望與需要</h3>
+              <p class="text-xs sm:text-sm text-muted leading-relaxed">
+                每一個讓你覺得懊惱的「${stance.shortName}」反應，底下都有一份原本想要保護你的善意與真實需求。
+              </p>
             </div>
 
-            <div class="bg-linen rounded-3xl p-5 border border-sand space-y-2">
-              <div class="text-xs font-bold text-deepsea flex items-center gap-1.5">
-                <span>${s.icon}</span> 「${s.shortName}」正在努力守護你的意圖：
+            <div class="bg-deepseaLight/60 rounded-2xl border border-deepsea/20 p-5 space-y-2">
+              <div class="flex items-center gap-2 text-xs font-bold text-deepsea">
+                <span>${stance.icon}</span>
+                <span>「${stance.shortName}」反應原本想保護你什麼？</span>
               </div>
-              <p class="font-serif text-sm sm:text-base text-ink leading-relaxed">${s.protectionIntention}</p>
+              <p class="text-xs sm:text-sm text-ink leading-relaxed">${stance.protectionIntention}</p>
             </div>
 
-            <div class="bg-warmgoldLight/60 rounded-2xl p-4 border border-warmgold/30 space-y-1">
-              <div class="text-xs font-bold text-amber-900">🔍 帶著好奇望向忽略的部分（${s.curiosityTarget}）：</div>
-              <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.curiosityPrompt}</p>
-            </div>
-
-            <div class="space-y-2.5">
-              <div class="text-xs sm:text-sm font-bold text-ink">冰山最深處，此刻我真正渴望被滿足的需要是（可複選）：</div>
+            <div class="space-y-3">
+              <div class="text-xs sm:text-sm font-bold text-deepsea">在這個事件裡，我內在真正渴望被滿足的需要是？（可複選）</div>
               <div class="flex flex-wrap gap-2">
-                ${NVC_NEED_TAGS.map(tag => {
-                  const active = w.needs.includes(tag);
-                  return `<button type="button" data-need="${tag}" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${
-                    active ? 'bg-sage text-white border-sage shadow-xs' : 'bg-white text-ink border-sand hover:bg-cream'
-                  }">${tag}</button>`;
+                ${allNeeds.map(need => {
+                  const selected = w.needs.includes(need);
+                  return `
+                    <button
+                      type="button"
+                      data-need-tag="${escapeHTML(need)}"
+                      class="px-3.5 py-2 rounded-full border text-xs sm:text-sm transition-all cursor-pointer ${
+                        selected
+                          ? 'bg-sage border-sage text-white font-semibold shadow-2xs'
+                          : 'bg-linen border-sand text-ink hover:bg-cream'
+                      }"
+                    >${selected ? '✓ ' : ''}${escapeHTML(need)}</button>
+                  `;
                 }).join('')}
               </div>
-              <input
-                id="wiz-custom-need"
-                type="text"
-                value="${w.customNeed}"
-                placeholder="或寫下其他內在需要（例如：被肯定、確定感、從容的步調...）"
-                class="w-full mt-2 p-3 rounded-2xl border border-sand bg-linen/60 focus:bg-white focus:border-sage focus:outline-none text-xs sm:text-sm"
-              />
+
+              <div class="flex gap-2 max-w-sm pt-1">
+                <input
+                  id="custom-need-input"
+                  type="text"
+                  value="${escapeHTML(w.customNeed)}"
+                  placeholder="想補充其他內在需要⋯"
+                  class="flex-1 rounded-xl border border-sand bg-linen px-3 py-2 text-xs text-ink focus:bg-white focus:outline-none focus:ring-2 focus:ring-sage/40"
+                />
+                <button
+                  type="button"
+                  id="add-custom-need-btn"
+                  class="px-3.5 py-2 rounded-xl bg-sage hover:bg-sage/90 text-white text-xs font-semibold cursor-pointer shrink-0"
+                >加入</button>
+              </div>
             </div>
           </div>
         `;
 
-        body.querySelectorAll('[data-need]').forEach(btn => {
+        bodyEl.querySelectorAll('[data-need-tag]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const tag = btn.dataset.need;
-            if (w.needs.includes(tag)) {
-              w.needs = w.needs.filter(n => n !== tag);
+            const need = btn.dataset.needTag;
+            if (w.needs.includes(need)) {
+              w.needs = w.needs.filter(n => n !== need);
             } else {
-              w.needs.push(tag);
+              w.needs.push(need);
             }
             renderWizard();
           });
         });
 
-        document.getElementById('wiz-custom-need').addEventListener('input', (e) => {
-          w.customNeed = e.target.value;
-        });
+        const customNeedInput = document.getElementById('custom-need-input');
+        const addCustomNeedBtn = document.getElementById('add-custom-need-btn');
+        if (customNeedInput) {
+          customNeedInput.addEventListener('input', () => {
+            w.customNeed = customNeedInput.value;
+          });
+          customNeedInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addCustomNeedBtn?.click();
+            }
+          });
+        }
+        if (addCustomNeedBtn) {
+          addCustomNeedBtn.addEventListener('click', () => {
+            const val = (w.customNeed || '').trim();
+            if (!val) return;
+            if (!w.needs.includes(val)) {
+              w.needs.push(val);
+            }
+            w.customNeed = '';
+            renderWizard();
+          });
+        }
       }
 
-      // --- 步驟 4：內化 (Internalization｜認領 1~3 項中性資源) ---
-      if (w.step === 4) {
-        const selectedItems = w.claimedTraits.map(idx => s.traits[idx]).filter(Boolean);
-
-        body.innerHTML = `
+      // -----------------------------------------------------------------------
+      // 步驟 4：內化（Internalization）— 認領 1~3 項中性原本特質，即時浮現轉化力量
+      // -----------------------------------------------------------------------
+      else if (w.step === 4) {
+        bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
             <div class="space-y-1.5">
-              <h2 class="font-serif text-lg sm:text-xl font-bold text-deepsea">認領你的原本特質：看見它們如何轉化成支持你的資源</h2>
+              <h3 class="font-serif text-lg sm:text-xl font-bold text-deepsea">4. 內化（Internalization）— 認領你的中性原本特質</h3>
               <p class="text-xs sm:text-sm text-muted leading-relaxed">
-                請從「${s.shortName}」中選擇 <strong>1～3 項</strong> 你最熟悉或最有感覺的原本特質，點擊認領後，看看它健康轉化後的中性力量。
+                請點選 1～3 項你在「${stance.shortName}」裡認出自己擁有的原本特質。認領它之後，看看它本來就具備的正面轉化力量。
               </p>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              ${s.traits.map((t, idx) => {
+            <div class="flex flex-wrap gap-2.5">
+              ${stance.traits.map((t, idx) => {
                 const picked = w.claimedTraits.includes(idx);
                 return `
                   <button
                     type="button"
                     data-claim-trait="${idx}"
-                    class="p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                    class="px-4 py-2.5 rounded-2xl border text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                       picked
-                        ? 'bg-sageLight border-sage shadow-sm ring-1 ring-sage'
-                        : 'bg-white border-sand hover:bg-cream/70'
+                        ? 'bg-sage text-white border-sage shadow-sm'
+                        : 'bg-linen border-sand text-ink hover:bg-cream'
                     }"
-                  >
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-serif text-sm sm:text-base font-bold text-deepsea">${t.raw}</span>
-                      <span class="text-xs font-bold ${picked ? 'text-sage' : 'text-muted'}">${picked ? '✓ 已認領' : '+ 點擊認領'}</span>
-                    </div>
-                    <div class="text-xs mt-1.5 ${picked ? 'text-sage font-semibold' : 'text-muted'}">
-                      ${picked ? `➔ ✨ ${t.transformed}` : '點擊查看轉化後的資源'}
-                    </div>
-                  </button>
+                  >${picked ? '✓ ' : ''}${t.raw}</button>
                 `;
               }).join('')}
             </div>
 
-            <!-- 即時資源轉化預覽區 -->
-            <div class="bg-linen rounded-3xl p-5 border border-sand space-y-3">
-              <div class="text-xs font-bold text-deepsea">💎 即時資源轉化預覽（已選擇 ${selectedItems.length} / 3 項）：</div>
-              ${selectedItems.length === 0 ? `
-                <p class="text-xs sm:text-sm text-muted">尚未選擇特質。先在上方挑選 1～3 個最貼近你的特質卡片吧。</p>
+            <div class="space-y-3">
+              <div class="text-xs font-bold text-deepsea">即時資源轉化預覽（已認領 ${w.claimedTraits.length} / 3 項）：</div>
+              ${w.claimedTraits.length === 0 ? `
+                <div class="bg-linen rounded-2xl border border-dashed border-sand p-6 text-center text-xs sm:text-sm text-muted">
+                  請點選上方至少 1 項原本特質，看見它如何為你轉化成一致性的資源。
+                </div>
               ` : `
-                <div class="space-y-2.5">
-                  ${selectedItems.map(item => `
-                    <div class="bg-white rounded-2xl p-3.5 border border-sage/25 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 animate-fade-up">
-                      <div class="flex items-center gap-2 shrink-0">
-                        <span class="px-2.5 py-0.5 rounded-lg bg-linen border border-sand text-xs font-semibold text-ink">${item.raw}</span>
-                        <span class="text-sage font-bold text-xs">➔</span>
-                        <span class="px-2.5 py-0.5 rounded-lg bg-sage text-white text-xs font-bold">✨ ${item.transformed}</span>
+                <div class="grid grid-cols-1 gap-3">
+                  ${w.claimedTraits.map(idx => {
+                    const t = stance.traits[idx];
+                    if (!t) return '';
+                    return `
+                      <div class="bg-sageLight/55 rounded-2xl border border-sage/35 p-4 space-y-2 animate-fade-up">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="px-2.5 py-1 rounded-lg bg-white border border-sand text-xs font-semibold text-ink">${t.raw}</span>
+                          <span class="text-sage font-bold text-xs">➔</span>
+                          <span class="px-3 py-1 rounded-lg bg-sage text-white text-xs font-bold">✨ ${t.transformed}</span>
+                          ${t.hasTip ? `
+                            <button
+                              type="button"
+                              data-wiz-open-tip="true"
+                              class="px-2 py-0.5 rounded-full bg-deepseaLight border border-deepsea/25 text-deepsea text-[11px] font-bold hover:bg-deepsea hover:text-white transition-colors cursor-pointer"
+                            >[i]</button>
+                          ` : ''}
+                        </div>
+                        <p class="text-xs sm:text-sm text-ink leading-relaxed">${t.explanation}</p>
                       </div>
-                      <p class="text-xs text-muted leading-relaxed">${item.explanation}</p>
-                    </div>
-                  `).join('')}
+                    `;
+                  }).join('')}
                 </div>
               `}
             </div>
           </div>
         `;
 
-        body.querySelectorAll('[data-claim-trait]').forEach(btn => {
+        bodyEl.querySelectorAll('[data-claim-trait]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const idx = Number(btn.dataset.claimTrait);
+            const idx = parseInt(btn.dataset.claimTrait, 10);
             if (w.claimedTraits.includes(idx)) {
               w.claimedTraits = w.claimedTraits.filter(i => i !== idx);
             } else {
               if (w.claimedTraits.length >= 3) {
-                showToast('最多可以先挑選 3 項最具代表性的特質專注整合喔。', '💡');
+                showToast('最多可同時認領 3 項主要特質，聚焦核心資源效果最好喔！', '💎');
                 return;
               }
               w.claimedTraits.push(idx);
@@ -2181,457 +2470,458 @@
             renderWizard();
           });
         });
+
+        bodyEl.querySelectorAll('[data-wiz-open-tip]').forEach(btn => {
+          btn.addEventListener('click', () => openTipModal());
+        });
       }
 
-      // --- 步驟 5：轉變 (Transformation｜各模式專屬好奇中斷 + NAC 痛樂槓桿 + 宣言 + NVC 請求) ---
-      if (w.step === 5) {
-        if (!w.nacDeclaration) w.nacDeclaration = s.nacDeclarationDefault;
-        if (!w.nvcRequest) w.nvcRequest = s.nvcRequestDefault;
-
-        body.innerHTML = `
+      // -----------------------------------------------------------------------
+      // 步驟 5：轉變（Transformation）— 好奇心模式中斷、NAC 痛樂槓桿、宣言與 NVC 請求
+      // -----------------------------------------------------------------------
+      else if (w.step === 5) {
+        bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
             <div class="space-y-1.5">
-              <h2 class="font-serif text-lg sm:text-xl font-bold text-deepsea">NAC 神經鏈調整術 × NVC 溫柔請求</h2>
-              <p class="text-xs sm:text-sm text-muted leading-relaxed">先用一聲屬於「${s.shortName}」的好奇提問打斷自動化慣性，再為大腦重新連結新的選擇。</p>
+              <h3 class="font-serif text-lg sm:text-xl font-bold text-deepsea">5. 轉變（Transformation）— NAC 神經鏈調整與 NVC 具體請求</h3>
+              <p class="text-xs sm:text-sm text-muted leading-relaxed">
+                不用責怪過去的慣性，先用一個輕巧的「好奇中斷」把大腦從自動防衛拉回當下，再為自己建立新的連結。
+              </p>
             </div>
 
-            <!-- 1. 模式中斷（按下去後才浮現該模式專屬好奇提問） -->
-            <div class="bg-clayLight/60 rounded-3xl p-5 border border-clay/30 space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="text-xs sm:text-sm font-bold text-clay">1. 模式中斷（Pattern Interrupt）</div>
+            <!-- 好奇心模式中斷（點擊後才浮現該模式專屬好奇句） -->
+            <div class="bg-clayLight/55 rounded-2xl border border-clay/30 p-5 space-y-4">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div class="text-xs font-bold text-clay">第一動：NAC 溫柔模式中斷</div>
+                  <p class="text-xs text-muted mt-0.5">點擊下方按鈕，輕輕打斷「${stance.shortName}」的自動反應迴路。</p>
+                </div>
                 <button
                   type="button"
-                  id="nac-interrupt-btn"
-                  class="px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                  id="wiz-interrupt-btn"
+                  class="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer shrink-0 ${
                     w.interrupted
-                      ? 'bg-clay text-white shadow-sm'
-                      : 'bg-white hover:bg-clay text-clay hover:text-white border border-clay/45 shadow-2xs'
+                      ? 'bg-clay text-white shadow-sm animate-interrupt'
+                      : 'bg-white border-2 border-clay text-clay hover:bg-clay hover:text-white'
                   }"
-                >
-                  🔍 咦？先好奇中斷一下（打斷慣性）
-                </button>
+                >${w.interrupted ? '✨ 已完成好奇中斷' : '🔍 咦？先好奇中斷一下（打斷慣性）'}</button>
               </div>
+
               ${w.interrupted ? `
-                <div class="bg-white rounded-2xl p-4 border border-clay/25 space-y-1.5 animate-fade-up">
-                  <div class="font-serif text-sm font-bold text-clay">${s.curiosityInterrupt.headline}</div>
-                  <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.curiosityInterrupt.question}</p>
-                  <p class="text-[11px] text-muted pt-0.5">✨ 這一聲輕輕的好奇，就是最溫柔也最有效的模式中斷——大腦已經從自動防衛切換回有選擇的空間了。</p>
+                <div class="bg-white rounded-2xl border border-clay/30 p-4 space-y-2 animate-fade-up">
+                  <p class="font-serif text-sm sm:text-base font-bold text-clay">${stance.curiosityInterrupt.headline}</p>
+                  <p class="text-xs sm:text-sm text-ink leading-relaxed">${stance.curiosityInterrupt.question}</p>
+                  <p class="text-[11px] text-muted pt-1 border-t border-sand/60">
+                    一聲輕輕的「咦？原來我現在正在這樣保護自己」，就是最溫柔也最有效的模式中斷。
+                  </p>
                 </div>
-              ` : `
-                <p class="text-xs text-muted">當舊的「${s.shortName}」反應正準備自動播放時，先輕輕按一下右上方的中斷按鈕。</p>
-              `}
+              ` : ''}
             </div>
 
-            <!-- 2. 痛樂槓桿 -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              <div class="bg-linen rounded-2xl p-4 border border-sand space-y-1.5">
-                <div class="text-xs font-bold text-clay">⚖️ 繼續舊慣性的代價（痛點）</div>
-                <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.nacPainCost}</p>
+            <!-- NAC 痛樂槓桿 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+                <div class="text-xs font-bold text-clay">⚡ 如果一直維持舊慣性（痛點覺察）</div>
+                <p class="text-xs sm:text-sm text-ink leading-relaxed">${stance.nacPainCost}</p>
               </div>
-              <div class="bg-sageLight/60 rounded-2xl p-4 border border-sage/25 space-y-1.5">
-                <div class="text-xs font-bold text-sage">🌿 整合新選擇的自由（樂點）</div>
-                <p class="text-xs sm:text-sm text-ink leading-relaxed">${s.nacPleasureFreedom}</p>
+              <div class="bg-sageLight/60 rounded-2xl border border-sage/30 p-4 space-y-1.5">
+                <div class="text-xs font-bold text-sage">🌿 選擇活出中性資源後（快樂與自由）</div>
+                <p class="text-xs sm:text-sm text-ink leading-relaxed">${stance.nacPleasureFreedom}</p>
               </div>
             </div>
 
-            <!-- 3. NAC 自我宣言 & NVC 請求 -->
+            <!-- 老手／高階盲區鏡 -->
+            <div class="bg-deepseaLight/45 rounded-2xl border border-deepsea/20 p-4 space-y-2">
+              <button
+                type="button"
+                id="wiz-blindspot-toggle"
+                class="w-full flex items-center justify-between gap-2 text-left cursor-pointer"
+              >
+                <span class="text-xs font-bold text-deepsea">🪞 老手深度自我核對：避免把「新語言」變成高級防衛</span>
+                <span class="text-xs text-deepsea font-semibold">${w.blindSpotOpen ? '收起 ▲' : '展開 ▼'}</span>
+              </button>
+              ${w.blindSpotOpen ? `
+                <div class="pt-2 border-t border-deepsea/15 space-y-1.5 text-xs text-ink leading-relaxed animate-fade-up">
+                  <div class="font-bold text-deepsea">${stance.metaBlindSpot.title}</div>
+                  <p>${stance.metaBlindSpot.description}</p>
+                  <p class="text-deepsea font-medium">🔍 ${stance.metaBlindSpot.checkQuestion}</p>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- NAC 新宣言 & NVC 具體請求 -->
             <div class="space-y-4">
-              <div class="bg-warmgoldLight/45 rounded-2xl p-4 border border-warmgold/30 space-y-2">
-                <label for="wiz-nac-decl" class="block text-xs sm:text-sm font-bold text-amber-900">
-                  2. 給自己的 NAC 新神經過渡宣言（可依你的語氣微調）
-                </label>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <label for="wiz-nac-decl" class="text-xs sm:text-sm font-bold text-deepsea">建立新的內在宣言（NAC 新神經鏈）</label>
+                  <button type="button" id="fill-nac-btn" class="text-[11px] font-semibold text-sage hover:underline cursor-pointer">帶入建議宣言</button>
+                </div>
                 <textarea
                   id="wiz-nac-decl"
                   rows="2"
-                  class="w-full p-3 rounded-xl border border-warmgold/35 bg-white focus:border-warmgold focus:outline-none text-xs sm:text-sm font-medium leading-relaxed"
-                >${w.nacDeclaration}</textarea>
+                  placeholder="${escapeHTML(stance.nacDeclarationDefault)}"
+                  class="w-full rounded-2xl border border-sand bg-linen/70 focus:bg-white px-4 py-3 text-xs sm:text-sm text-ink focus:outline-none focus:ring-2 focus:ring-sage/35"
+                >${escapeHTML(w.nacDeclaration)}</textarea>
               </div>
 
-              <div class="bg-deepseaLight/45 rounded-2xl p-4 border border-deepsea/20 space-y-2">
-                <label for="wiz-nvc-req" class="block text-xs sm:text-sm font-bold text-deepsea">
-                  3. 具體可行的 NVC 溫柔請求（對自己或對方的下一句話）
-                </label>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <label for="wiz-nvc-req" class="text-xs sm:text-sm font-bold text-deepsea">我想對自己或對方提出的具體可行請求（NVC 請求）</label>
+                  <button type="button" id="fill-nvc-btn" class="text-[11px] font-semibold text-sage hover:underline cursor-pointer">帶入建議請求</button>
+                </div>
                 <textarea
                   id="wiz-nvc-req"
                   rows="2"
-                  class="w-full p-3 rounded-xl border border-deepsea/25 bg-white focus:border-deepsea focus:outline-none text-xs sm:text-sm font-medium leading-relaxed"
-                >${w.nvcRequest}</textarea>
+                  placeholder="${escapeHTML(stance.nvcRequestDefault)}"
+                  class="w-full rounded-2xl border border-sand bg-linen/70 focus:bg-white px-4 py-3 text-xs sm:text-sm text-ink focus:outline-none focus:ring-2 focus:ring-sage/35"
+                >${escapeHTML(w.nvcRequest)}</textarea>
               </div>
-            </div>
-
-            <!-- 4. 老手自我檢核盲區鏡（可選展開） -->
-            <div class="bg-deepseaLight/45 rounded-2xl p-4 border border-deepsea/20 space-y-2.5">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <span class="text-xs font-bold text-deepsea">🪞 老手進階校準：確認這次的轉變不是「高階偽裝」</span>
-                <button
-                  type="button"
-                  id="wiz-blindspot-toggle"
-                  class="self-start sm:self-auto px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    w.blindSpotOpen
-                      ? 'bg-deepsea text-white border-deepsea'
-                      : 'bg-white text-deepsea border-deepsea/30 hover:bg-deepseaLight'
-                  }"
-                >
-                  ${w.blindSpotOpen ? '收起校準 ▲' : `打開「${s.shortName}」盲區鏡 ▾`}
-                </button>
-              </div>
-              ${w.blindSpotOpen ? `
-                <div class="bg-white rounded-xl p-3.5 border border-deepsea/20 space-y-1.5 text-xs leading-relaxed animate-fade-up">
-                  <div class="font-bold text-deepsea">${s.metaBlindSpot.title}</div>
-                  <p class="text-muted">${s.metaBlindSpot.description}</p>
-                  <p class="font-serif text-ink font-semibold pt-1">🔍 ${s.metaBlindSpot.checkQuestion}</p>
-                </div>
-              ` : ''}
             </div>
           </div>
         `;
 
-        const wizBlindSpotBtn = document.getElementById('wiz-blindspot-toggle');
-        if (wizBlindSpotBtn) {
-          wizBlindSpotBtn.addEventListener('click', () => {
+        const interruptBtn = document.getElementById('wiz-interrupt-btn');
+        if (interruptBtn) {
+          interruptBtn.addEventListener('click', () => {
+            w.interrupted = true;
+            renderWizard();
+          });
+        }
+
+        const wizBlindBtn = document.getElementById('wiz-blindspot-toggle');
+        if (wizBlindBtn) {
+          wizBlindBtn.addEventListener('click', () => {
             w.blindSpotOpen = !w.blindSpotOpen;
             renderWizard();
           });
         }
 
-        const interruptBtn = document.getElementById('nac-interrupt-btn');
-        interruptBtn.addEventListener('click', () => {
-          w.interrupted = true;
-          renderWizard();
-          const newBtn = document.getElementById('nac-interrupt-btn');
-          if (newBtn) newBtn.classList.add('animate-interrupt');
-        });
+        const nacInput = document.getElementById('wiz-nac-decl');
+        if (nacInput) {
+          nacInput.addEventListener('input', () => { w.nacDeclaration = nacInput.value; });
+        }
+        const nvcInput = document.getElementById('wiz-nvc-req');
+        if (nvcInput) {
+          nvcInput.addEventListener('input', () => { w.nvcRequest = nvcInput.value; });
+        }
 
-        document.getElementById('wiz-nac-decl').addEventListener('input', (e) => {
-          w.nacDeclaration = e.target.value;
-        });
-        document.getElementById('wiz-nvc-req').addEventListener('input', (e) => {
-          w.nvcRequest = e.target.value;
-        });
+        const fillNacBtn = document.getElementById('fill-nac-btn');
+        if (fillNacBtn) {
+          fillNacBtn.addEventListener('click', () => {
+            w.nacDeclaration = stance.nacDeclarationDefault;
+            renderWizard();
+          });
+        }
+        const fillNvcBtn = document.getElementById('fill-nvc-btn');
+        if (fillNvcBtn) {
+          fillNvcBtn.addEventListener('click', () => {
+            w.nvcRequest = stance.nvcRequestDefault;
+            renderWizard();
+          });
+        }
       }
 
-      // --- 步驟 6：重新看待資源 (Reframing｜內在資源整合卡) ---
-      if (w.step === 6) {
-        const allFeelings = [...w.feelings, ...(w.customFeeling.trim() ? [w.customFeeling.trim()] : [])];
-        const allNeeds = [...w.needs, ...(w.customNeed.trim() ? [w.customNeed.trim()] : [])];
-        const claimedItems = (w.claimedTraits.length ? w.claimedTraits : [0, 1]).map(i => s.traits[i]).filter(Boolean);
-        const declText = w.nacDeclaration || s.nacDeclarationDefault;
-        const reqText = w.nvcRequest || s.nvcRequestDefault;
+      // -----------------------------------------------------------------------
+      // 步驟 6：重新看待資源（Reframing）— 生成專屬「內在資源整合卡」
+      // -----------------------------------------------------------------------
+      else if (w.step === 6) {
+        syncWizardFeelings();
+        const obsText = (w.observation || '').trim() || stance.obsPresets[0];
+        const feelingsList = w.feelings.length > 0 ? w.feelings : ['還在細細感受中'];
+        const needsList = w.needs.length > 0 ? w.needs : ['安全感', '被理解'];
+        const claimedList = (w.claimedTraits.length > 0 ? w.claimedTraits : [0]).map(idx => stance.traits[idx]).filter(Boolean);
+        const declText = (w.nacDeclaration || '').trim() || stance.nacDeclarationDefault;
+        const reqText = (w.nvcRequest || '').trim() || stance.nvcRequestDefault;
 
-        body.innerHTML = `
+        bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
-            <div class="text-center space-y-1.5">
-              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sageLight text-sage text-xs font-bold">
-                <span>🌿</span> 步驟 6 · 重新看待資源
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="space-y-1">
+                <h3 class="font-serif text-lg sm:text-xl font-bold text-deepsea">6. 重新看待資源（Reframing）— 你的內在資源整合卡</h3>
+                <p class="text-xs sm:text-sm text-muted">帶著「資源是中性的」與一盞好奇心微光，把這份整合帶回日常生活。</p>
               </div>
-              <h2 class="font-serif text-xl sm:text-2xl font-bold text-deepsea">你的內在資源整合卡</h2>
-              <p class="text-xs sm:text-sm text-muted">當你以中性與好奇心重新看見保護特質，它們就回到一致性裡為你工作。</p>
+              <button
+                type="button"
+                id="copy-card-btn"
+                class="px-4 py-2.5 rounded-2xl bg-deepsea hover:bg-deepsea/90 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
+              >📋 一鍵複製整合卡</button>
             </div>
 
-            <div class="bg-gradient-to-br from-linen via-white to-sageLight/45 rounded-3xl border-2 border-sage/35 p-5 sm:p-7 shadow-sm space-y-5">
+            <div class="bg-gradient-to-br from-linen via-white to-sageLight/45 rounded-3xl border-2 border-sage/30 p-5 sm:p-7 space-y-5 shadow-sm">
               <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-sand">
-                <div class="flex items-center gap-3">
-                  ${renderTriadCircleSVG({ self: true, other: true, context: true }, 'w-14 h-14', false)}
+                <div class="flex items-center gap-2.5">
+                  <span class="text-2xl">${stance.icon}</span>
                   <div>
-                    <div class="text-xs text-muted">整合出發點 ➔ 邁向一致性</div>
-                    <div class="font-serif text-base sm:text-lg font-bold text-deepsea">${s.icon} ${s.shortName} ➔ 🌿 一致性平衡</div>
+                    <div class="font-serif text-base sm:text-lg font-bold text-deepsea">從「${stance.shortName}」走向「一致性」</div>
+                    <div class="text-xs text-muted">${stance.curiosityTarget}</div>
                   </div>
                 </div>
-                <span class="px-3 py-1 rounded-full bg-sage text-white text-xs font-bold">自己 · 他人 · 情境 3/3</span>
+                <span class="px-3 py-1 rounded-full bg-sageLight text-sage text-xs font-bold">🌿 中性資源已認領</span>
               </div>
 
-              ${w.observation.trim() ? `
-                <div class="space-y-1">
-                  <div class="text-xs font-bold text-muted">📷 NVC 客觀觀察</div>
-                  <p class="text-xs sm:text-sm text-ink bg-white/80 p-3 rounded-xl border border-sand">${w.observation.trim()}</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
+                <div class="bg-white/90 rounded-2xl border border-sand p-4 space-y-1.5">
+                  <div class="text-xs font-bold text-deepsea">👀 客觀觀察</div>
+                  <p class="text-ink leading-relaxed">${escapeHTML(obsText)}</p>
                 </div>
-              ` : ''}
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="bg-white/85 rounded-2xl p-3.5 border border-sand space-y-1">
-                  <div class="text-xs font-bold text-amber-800">💛 真實感受</div>
-                  <div class="text-xs sm:text-sm text-ink font-medium">${allFeelings.length ? allFeelings.join('、') : '允許自己如實感受此刻'}</div>
-                </div>
-                <div class="bg-white/85 rounded-2xl p-3.5 border border-sand space-y-1">
-                  <div class="text-xs font-bold text-sage">🌱 深層需要</div>
-                  <div class="text-xs sm:text-sm text-ink font-medium">${allNeeds.length ? allNeeds.join('、') : '安全感、被理解與尊重'}</div>
+                <div class="bg-white/90 rounded-2xl border border-sand p-4 space-y-2">
+                  <div class="text-xs font-bold text-warmgold">💛 真實感受與底層需要</div>
+                  <div class="flex flex-wrap gap-1.5">
+                    ${feelingsList.map(f => `<span class="px-2.5 py-0.5 rounded-full bg-warmgoldLight border border-warmgold/40 text-xs text-ink font-medium">${escapeHTML(f)}</span>`).join('')}
+                  </div>
+                  <div class="flex flex-wrap gap-1.5 pt-1">
+                    ${needsList.map(n => `<span class="px-2.5 py-0.5 rounded-full bg-sageLight border border-sage/30 text-xs text-sage font-semibold">需要：${escapeHTML(n)}</span>`).join('')}
+                  </div>
                 </div>
               </div>
 
-              <div class="space-y-2">
-                <div class="text-xs font-bold text-deepsea">💎 我重新認領的中性內在資源</div>
-                <div class="flex flex-wrap gap-2">
-                  ${claimedItems.map(item => `
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sageLight text-deepsea border border-sage/30 text-xs sm:text-sm font-semibold">
-                      <span class="text-muted">${item.raw}</span>
-                      <span class="text-sage">➔</span>
-                      <span class="text-sage font-bold">✨ ${item.transformed}</span>
-                    </span>
+              <div class="bg-white/90 rounded-2xl border border-sage/30 p-4 space-y-2.5">
+                <div class="text-xs font-bold text-sage">💎 我認領的中性資源轉化</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  ${claimedList.map(t => `
+                    <div class="bg-linen rounded-xl border border-sand p-3">
+                      <div class="text-xs font-bold text-ink">${t.raw} <span class="text-sage">➔ ✨ ${t.transformed}</span></div>
+                      <p class="text-[11px] text-muted mt-1 leading-relaxed">${t.explanation}</p>
+                    </div>
                   `).join('')}
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
-                <div class="bg-warmgoldLight/60 rounded-2xl p-4 border border-warmgold/30 space-y-1">
-                  <div class="text-xs font-bold text-amber-900">🗣️ 我的 NAC 整合宣言</div>
-                  <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed">${declText}</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
+                <div class="bg-white/90 rounded-2xl border border-sand p-4 space-y-1.5">
+                  <div class="text-xs font-bold text-clay">✨ 新的內在宣言（NAC）</div>
+                  <p class="font-serif text-ink leading-relaxed">${escapeHTML(declText)}</p>
                 </div>
-                <div class="bg-deepseaLight/60 rounded-2xl p-4 border border-deepsea/20 space-y-1">
-                  <div class="text-xs font-bold text-deepsea">🤝 下一步 NVC 請求</div>
-                  <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed">${reqText}</p>
+                <div class="bg-white/90 rounded-2xl border border-sand p-4 space-y-1.5">
+                  <div class="text-xs font-bold text-deepsea">🤝 具體可行請求（NVC）</div>
+                  <p class="text-ink leading-relaxed">${escapeHTML(reqText)}</p>
                 </div>
               </div>
-            </div>
 
-            <!-- 首尾呼應：帶回日常的好奇心微光 -->
-            <div class="bg-warmgoldLight/70 rounded-2xl border border-warmgold/35 p-4 sm:p-5 space-y-1.5">
-              <div class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                <span>🕯️</span> 帶回日常的好奇心微光（${s.curiosityTarget}）
+              <div class="bg-warmgoldLight/70 rounded-2xl border border-warmgold/30 p-4 space-y-1.5">
+                <div class="text-xs font-bold text-warmgold">🔍 帶回日常的好奇心微光與一致校準</div>
+                <p class="text-xs text-ink leading-relaxed">${stance.curiosityPrompt}</p>
+                <p class="text-[11px] text-muted leading-relaxed pt-1 border-t border-warmgold/20">${STANCES.congruence.calibrationPrompt}</p>
               </div>
-              <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed">${s.curiosityPrompt}</p>
-            </div>
-
-            <!-- 一致性動態校準 -->
-            <div class="bg-deepseaLight/55 rounded-2xl border border-deepsea/20 p-4 sm:p-5 space-y-1.5">
-              <div class="text-xs font-bold text-deepsea flex items-center gap-1.5">
-                <span>🧭</span> 給自己的溫柔提醒：不一致也沒關係
-              </div>
-              <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed">${STANCES.congruence.calibrationPrompt}</p>
-            </div>
-
-            <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                id="copy-integration-card-btn"
-                class="px-5 py-2.5 rounded-2xl bg-deepsea hover:bg-deepsea/90 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all active:scale-95 cursor-pointer"
-              >
-                📋 複製整份整合卡內容
-              </button>
             </div>
           </div>
         `;
 
-        document.getElementById('copy-integration-card-btn').addEventListener('click', () => {
-          const textToCopy = [
-            '【內在資源整合卡｜薩提爾 × 非暴力溝通 × NAC】',
-            `探索姿態：${s.shortName} ➔ 一致性`,
-            w.observation.trim() ? `客觀觀察：${w.observation.trim()}` : '',
-            `真實感受：${allFeelings.length ? allFeelings.join('、') : '允許自己如實感受此刻'}`,
-            `深層需要：${allNeeds.length ? allNeeds.join('、') : '安全感、被理解與尊重'}`,
-            `轉化資源：${claimedItems.map(i => `${i.raw} ➔ ${i.transformed}`).join('；')}`,
-            `NAC 整合宣言：${declText}`,
-            `NVC 請求：${reqText}`,
-            `好奇心微光（${s.curiosityTarget}）：${s.curiosityPrompt}`
-          ].filter(Boolean).join('\n');
+        const copyBtn = document.getElementById('copy-card-btn');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', () => {
+            const plainText = [
+              `【內在資源整合卡｜從「${stance.shortName}」走向一致性】`,
+              `• 客觀觀察：${obsText}`,
+              `• 真實感受：${feelingsList.join('、')}`,
+              `• 內在需要：${needsList.join('、')}`,
+              `• 認領資源：${claimedList.map(t => `${t.raw} ➔ ${t.transformed}`).join('；')}`,
+              `• 新的宣言：${declText}`,
+              `• 具體請求：${reqText}`,
+              `• 好奇微光：${stance.curiosityPrompt}`
+            ].join('\n');
 
-          copyToClipboard(textToCopy);
-        });
-      }
-    }
-
-    function copyToClipboard(text) {
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        if (ok) {
-          showToast('已為您複製整份內在資源整合卡！', '📋');
-        } else {
-          showToast('無法自動複製，請手動選取卡片文字複製。', '💡');
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = plainText;
+              ta.setAttribute('readonly', '');
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              const ok = document.execCommand('copy');
+              document.body.removeChild(ta);
+              if (ok) {
+                showToast('已複製「內在資源整合卡」到剪貼簿！', '📋');
+              } else {
+                showToast('請手動選取卡片文字進行複製', '💡');
+              }
+            } catch (err) {
+              showToast('目前環境不支援自動複製，請手動選取文字', '💡');
+            }
+          });
         }
-      } catch (err) {
-        showToast('無法自動複製，請手動選取卡片文字複製。', '💡');
       }
-    }
-
-    function resetWizardState() {
-      stopBreathingIfNeeded();
-      state.wizard = {
-        step: 1,
-        stanceId: 'placater',
-        breathFocus: '先單純安頓自己',
-        breathCompleted: false,
-        breathAfterFeel: '',
-        observation: '',
-        feelings: [],
-        activeBodySignals: [],
-        manualFeelings: [],
-        suppressedFeelings: [],
-        customFeeling: '',
-        needs: [],
-        customNeed: '',
-        claimedTraits: [],
-        curiositySwitched: false,
-        interrupted: false,
-        blindSpotOpen: false,
-        nacDeclaration: '',
-        nvcRequest: ''
-      };
-      renderWizard();
-      showToast('已重置六步探索流程，隨時都能重新溫柔出發。', '🌿');
     }
 
     // =========================================================================
-    // 9. 渲染分頁三：四種姿態核心比較
+    // 8. 分頁三：四種姿態核心比較（桌機表格 + 手機卡片）
     // =========================================================================
     function renderCompare() {
       const container = document.getElementById('compare-content');
       if (!container) return;
 
-      const items = FOUR_COPING_IDS.map(id => STANCES[id]);
-
       container.innerHTML = `
-        <!-- 桌機版比較表格 -->
-        <div class="hidden md:block bg-white rounded-3xl border border-sand shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-cream border-b border-sand text-xs font-bold text-deepsea">
-                  <th class="p-4 w-36">應對姿態</th>
-                  <th class="p-4 w-44">亮起與忽略（1/3 圓）</th>
-                  <th class="p-4 w-56">核心信念與口頭禪</th>
-                  <th class="p-4">原本特質 ➔ 健康轉化後資源</th>
-                  <th class="p-4 w-52">健康成長方向</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-sand text-xs sm:text-sm">
-                ${items.map(s => `
+        <!-- 桌機版表格 -->
+        <div class="hidden md:block bg-white rounded-3xl border border-sand shadow-xs overflow-hidden">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-cream/80 border-b border-sand text-xs font-bold text-deepsea">
+                <th class="p-4 w-40">姿態與 1/3 圖示</th>
+                <th class="p-4 w-36">亮區資源</th>
+                <th class="p-4">壓力下的核心信念與外在特徵</th>
+                <th class="p-4 w-48">潛在中性資源</th>
+                <th class="p-4">健康轉化方向與好奇入口</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-sand text-xs leading-relaxed">
+              ${FOUR_COPING_IDS.map(id => {
+                const s = STANCES[id];
+                return `
                   <tr class="hover:bg-linen/60 transition-colors align-top">
                     <td class="p-4">
-                      <div class="flex items-center gap-2">
-                        <span class="text-xl">${s.icon}</span>
+                      <div class="flex items-center gap-3">
+                        ${renderTriadCircleSVG(s.litParts, 'w-14 h-14', false)}
                         <div>
-                          <div class="font-serif font-bold text-deepsea">${s.shortName}</div>
+                          <div class="font-bold text-sm text-deepsea">${s.icon} ${s.shortName}</div>
                           <div class="text-[11px] text-muted">${s.englishName}</div>
                         </div>
                       </div>
                     </td>
+                    <td class="p-4 font-semibold text-sage">${s.litBadge}</td>
+                    <td class="p-4 space-y-1.5">
+                      <div class="text-ink font-medium">${s.coreBelief}</div>
+                      <div class="text-muted">${s.externalTraits}</div>
+                    </td>
                     <td class="p-4">
-                      <div class="flex items-center gap-2.5">
-                        ${renderTriadCircleSVG(s.litParts, 'w-12 h-12', false)}
-                        <div class="text-[11px] leading-snug">
-                          <div class="font-bold text-sage">${s.litBadge}</div>
-                          <div class="text-muted mt-0.5">${s.curiosityTarget}</div>
-                        </div>
+                      <div class="flex flex-wrap gap-1">
+                        ${s.traits.map(t => `<span class="px-2 py-0.5 rounded-lg bg-sageLight text-sage font-semibold">${t.transformed}</span>`).join('')}
                       </div>
                     </td>
                     <td class="p-4 space-y-1.5">
-                      <p class="font-serif text-xs text-ink leading-relaxed">${s.coreBelief}</p>
-                      <div class="text-[11px] text-muted bg-linen px-2 py-1 rounded-lg border border-sand inline-block">${s.catchphrases[0]}</div>
-                    </td>
-                    <td class="p-4">
-                      <div class="flex flex-wrap gap-1.5">
-                        ${s.traits.map(t => `
-                          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sageLight/60 border border-sage/20 text-[11px]">
-                            <span class="text-muted">${t.raw}</span>
-                            <span class="text-sage">➔</span>
-                            <span class="font-bold text-deepsea">${t.transformed}</span>
-                          </span>
-                        `).join('')}
-                      </div>
-                    </td>
-                    <td class="p-4">
-                      <p class="text-xs text-ink leading-relaxed">${s.growthDirection}</p>
+                      <div class="text-ink">${s.growthDirection}</div>
+                      <div class="text-warmgold font-medium">🔍 ${s.curiosityTarget}</div>
                     </td>
                   </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
         </div>
 
-        <!-- 手機版卡片對照 -->
-        <div class="grid grid-cols-1 gap-4 md:hidden">
-          ${items.map(s => `
-            <div class="bg-white rounded-3xl border border-sand p-5 space-y-4 shadow-2xs">
-              <div class="flex items-center justify-between gap-3 pb-3 border-b border-sand">
-                <div class="flex items-center gap-2.5">
-                  <span class="text-2xl">${s.icon}</span>
-                  <div>
-                    <div class="font-serif text-base font-bold text-deepsea">${s.shortName}（${s.englishName}）</div>
-                    <div class="text-[11px] font-semibold text-sage">${s.litBadge}</div>
+        <!-- 手機版卡片清單 -->
+        <div class="md:hidden space-y-4">
+          ${FOUR_COPING_IDS.map(id => {
+            const s = STANCES[id];
+            return `
+              <div class="bg-white rounded-3xl border border-sand p-5 space-y-3 shadow-2xs">
+                <div class="flex items-center justify-between gap-3 pb-3 border-b border-sand">
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">${s.icon}</span>
+                    <div>
+                      <div class="font-bold text-base text-deepsea">${s.shortName}（${s.englishName}）</div>
+                      <div class="text-xs font-semibold text-sage">${s.litBadge}</div>
+                    </div>
                   </div>
+                  ${renderTriadCircleSVG(s.litParts, 'w-14 h-14', false)}
                 </div>
-                ${renderTriadCircleSVG(s.litParts, 'w-14 h-14', false)}
-              </div>
-              <div class="space-y-1">
-                <div class="text-[11px] font-bold text-muted">核心信念與口頭禪</div>
-                <p class="font-serif text-xs text-ink leading-relaxed">${s.coreBelief}</p>
-                <div class="text-[11px] text-muted bg-linen px-2.5 py-1 rounded-lg border border-sand inline-block">${s.catchphrases[0]}</div>
-              </div>
-              <div class="space-y-1.5">
-                <div class="text-[11px] font-bold text-sage">原本特質 ➔ 轉化後資源</div>
-                <div class="flex flex-wrap gap-1.5">
-                  ${s.traits.map(t => `
-                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sageLight/60 border border-sage/20 text-[11px]">
-                      <span class="text-muted">${t.raw}</span>
-                      <span class="text-sage">➔</span>
-                      <span class="font-bold text-deepsea">${t.transformed}</span>
-                    </span>
-                  `).join('')}
+                <div class="text-xs text-ink leading-relaxed"><strong class="text-clay">核心信念：</strong>${s.coreBelief}</div>
+                <div class="text-xs text-muted leading-relaxed"><strong>外在表現：</strong>${s.externalTraits}</div>
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  ${s.traits.map(t => `<span class="px-2.5 py-0.5 rounded-lg bg-sageLight text-sage text-xs font-semibold">✨ ${t.transformed}</span>`).join('')}
+                </div>
+                <div class="bg-linen rounded-xl p-3 text-xs text-ink leading-relaxed">
+                  <span class="font-bold text-warmgold">🔍 ${s.curiosityTarget}：</span>${s.growthDirection}
                 </div>
               </div>
-              <div class="bg-linen rounded-2xl p-3 border border-sand space-y-1">
-                <div class="text-[11px] font-bold text-deepsea">🌱 成長方向</div>
-                <p class="text-xs text-ink leading-relaxed">${s.growthDirection}</p>
-              </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       `;
     }
 
     // =========================================================================
-    // 10. 應用程式初始化（於 window onload 啟動）
+    // 9. 全域事件與初始化
     // =========================================================================
     function initApp() {
-      setupAudioPlayer();
-
       document.querySelectorAll('.main-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          switchMainTab(btn.dataset.mainTab);
+        btn.addEventListener('click', () => switchMainTab(btn.dataset.mainTab));
+      });
+
+      const toastCloseBtn = document.getElementById('toast-close-btn');
+      if (toastCloseBtn) {
+        toastCloseBtn.addEventListener('click', () => {
+          const container = document.getElementById('toast-container');
+          if (container) {
+            container.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+            container.classList.remove('opacity-100', 'translate-y-0');
+          }
         });
-      });
+      }
 
-      document.getElementById('toast-close-btn').addEventListener('click', hideToast);
-      document.getElementById('tip-modal-close').addEventListener('click', closeTipModal);
-      document.getElementById('tip-modal-confirm').addEventListener('click', closeTipModal);
-      document.getElementById('tip-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'tip-modal') closeTipModal();
-      });
+      const tipModal = document.getElementById('tip-modal');
+      const tipClose = document.getElementById('tip-modal-close');
+      const tipConfirm = document.getElementById('tip-modal-confirm');
+      if (tipClose) tipClose.addEventListener('click', closeTipModal);
+      if (tipConfirm) tipConfirm.addEventListener('click', closeTipModal);
+      if (tipModal) {
+        tipModal.addEventListener('click', (e) => {
+          if (e.target === tipModal) closeTipModal();
+        });
+      }
 
-      document.getElementById('wizard-prev-btn').addEventListener('click', () => {
-        if (state.wizard.step > 1) {
-          state.wizard.step -= 1;
+      const prevBtn = document.getElementById('wizard-prev-btn');
+      const nextBtn = document.getElementById('wizard-next-btn');
+      const resetBtn = document.getElementById('wizard-reset-btn');
+
+      if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+          if (state.wizard.step > 1) {
+            state.wizard.step -= 1;
+            renderWizard();
+          }
+        });
+      }
+
+      if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+          if (state.wizard.step === 1) stopBreathing(true);
+          if (state.wizard.step < 6) {
+            state.wizard.step += 1;
+          } else {
+            state.wizard.step = 1;
+          }
           renderWizard();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      });
+        });
+      }
 
-      document.getElementById('wizard-next-btn').addEventListener('click', () => {
-        if (state.wizard.step < 6) {
-          state.wizard.step += 1;
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          stopBreathing(true);
+          state.wizard = {
+            ...state.wizard,
+            step: 1,
+            breathCompleted: false,
+            breathAfterFeel: '',
+            curiositySwitched: false,
+            observation: '',
+            activeBodySignals: [],
+            manualFeelings: [],
+            suppressedFeelings: [],
+            feelings: [],
+            customFeeling: '',
+            needs: [],
+            customNeed: '',
+            claimedTraits: [],
+            interrupted: false,
+            blindSpotOpen: false,
+            nacDeclaration: '',
+            nvcRequest: ''
+          };
           renderWizard();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-          switchMainTab('atlas');
-        }
-      });
+          showToast('已重置本次六步探索，隨時可以重新開始', '🌿');
+        });
+      }
 
-      document.getElementById('wizard-reset-btn').addEventListener('click', resetWizardState);
-
+      initMusicController();
       switchMainTab('atlas');
     }
 
-    window.onload = function () {
+    if (document.readyState === 'complete') {
       initApp();
-    };
+    } else {
+      window.addEventListener('load', initApp);
+    }
   </script>
 </body>
 </html>
