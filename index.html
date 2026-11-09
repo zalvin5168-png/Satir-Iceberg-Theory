@@ -600,6 +600,22 @@
       { signal: '真的說不上名字，只覺得卡卡的', hints: ['說不上來（只覺得卡卡的）'], hintText: '不知道怎麼形容完全沒關係，這份模糊就是最真實的入口' }
     ];
 
+    // 方向一：呼吸前設定的覺察焦點
+    const BREATH_FOCUS_OPTIONS = [
+      { id: 'chest', label: '胸口悶悶緊緊的', inhaleCue: '把一點點新鮮而寬敞的空間，輕輕吸進胸口的緊繃裡', holdCue: '不急著推開這份緊悶，只是陪它安靜待 4 秒' },
+      { id: 'mind', label: '腦袋停不下來', inhaleCue: '感覺氣息從頭頂往下沉，讓轉動的思緒有一個可以停靠的岸', holdCue: '暫時不用找答案，讓腦袋在靜止的 4 秒裡歇一下' },
+      { id: 'heavy', label: '心裡有點酸或沉', inhaleCue: '溫柔地把氣息送到心口，接住那份有點重、有點酸的感覺', holdCue: '不需要急著振作起來，只是誠實地陪這份重量待 4 秒' },
+      { id: 'stuck', label: '說不上來但卡卡的', inhaleCue: '允許這份模糊存在，跟著氣息感覺身體此刻真實的位置', holdCue: '不知道名字也沒關係，好奇地跟這份卡住待 4 秒' },
+      { id: 'calm', label: '先單純安頓自己', inhaleCue: '感受空氣緩緩流過鼻腔與胸腹，把注意力溫柔帶回自己身上', holdCue: '在這一小段空白裡，感覺此時此刻的自己是安全的' }
+    ];
+
+    // 方向一：呼吸後的非評斷覺察回饋
+    const BREATH_AFTER_OPTIONS = [
+      { id: 'looser', icon: '🍃', label: '鬆動了一點點', reply: '身體聽見了你的善意，那份微小的鬆動，就是內在空間正在打開的證明。' },
+      { id: 'clearer', icon: '🔍', label: '感覺變得更清楚了', reply: '當雜訊稍微安靜下來，你就能更清楚聽見心裡真正想說的話。' },
+      { id: 'present', icon: '⚓', label: '它還在，但我更有空間陪著它了', reply: '這是最深也最真實的覺察——呼吸不是為了趕走感受，而是讓你有足夠的穩重，去陪著此刻有感覺的自己。' }
+    ];
+
     // =========================================================================
     // 2. 應用程式全域狀態
     // =========================================================================
@@ -612,6 +628,9 @@
       wizard: {
         step: 1,
         stanceId: 'placater',
+        breathFocus: '先單純安頓自己',
+        breathCompleted: false,
+        breathAfterFeel: '',
         observation: '',
         feelings: [],
         activeBodySignals: [],
@@ -661,11 +680,135 @@
     let toastTimer = null;
 
     // =========================================================================
-    // 3. 音樂播放控制與平滑降音引擎（預設 80%，深呼吸降 50% 至 40%）
+    // 3. 音樂播放控制、暫停切換與 Web Audio 深沉頌缽合成器
     // =========================================================================
-    const BASE_VOLUME = 0.8;   // 比原音小聲 20%
-    const DUCK_VOLUME = 0.4;   // 深呼吸時小聲 50%（基準的一半）
+    const BASE_VOLUME = 0.8;   // 預設音量（比原音小聲 20%）
     let musicFadeFrame = null;
+    let breathFadeTimeout = null;
+    let musicPausedByBreath = false;
+    let bowlAudioCtx = null;
+
+    function getBowlAudioContext() {
+      try {
+        if (!bowlAudioCtx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) bowlAudioCtx = new AudioCtx();
+        }
+        if (bowlAudioCtx && bowlAudioCtx.state === 'suspended') {
+          bowlAudioCtx.resume();
+        }
+      } catch (e) {
+        return null;
+      }
+      return bowlAudioCtx;
+    }
+
+    /**
+     * 物理泛音合成深沉西藏頌缽聲
+     * @param {'deep' | 'hold' | 'exhale' | 'close'} variant
+     */
+    function playSingingBowl(variant = 'deep') {
+      const ctx = getBowlAudioContext();
+      if (!ctx) return;
+
+      try {
+        const now = ctx.currentTime;
+
+        // 總輸出與溫潤低通濾波，壓低高頻亮度，突顯沉緩厚實的胸腔共鳴
+        const masterGain = ctx.createGain();
+        const lowpass = ctx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+
+        if (variant === 'hold') {
+          lowpass.frequency.setValueAtTime(680, now);
+          lowpass.frequency.exponentialRampToValueAtTime(220, now + 8.0);
+          masterGain.gain.setValueAtTime(0.36, now);
+        } else if (variant === 'exhale') {
+          lowpass.frequency.setValueAtTime(720, now);
+          lowpass.frequency.exponentialRampToValueAtTime(210, now + 9.0);
+          masterGain.gain.setValueAtTime(0.42, now);
+        } else {
+          lowpass.frequency.setValueAtTime(920, now);
+          lowpass.frequency.exponentialRampToValueAtTime(260, now + 11.0);
+          masterGain.gain.setValueAtTime(0.48, now);
+        }
+
+        lowpass.connect(masterGain);
+        masterGain.connect(ctx.destination);
+
+        // 更低沉的協和下降頻率：吸氣 108 Hz -> 停住 81 Hz（四度平穩承接）-> 吐氣 72 Hz（五度深度落地）
+        // 同時將拍頻差縮小至 0.40 ~ 0.55 Hz，讓水波般的「嗡——」律動更緩慢深長
+        const baseFreq = variant === 'hold' ? 81.0 : variant === 'exhale' ? 72.0 : 108.0;
+        const duration = variant === 'hold' ? 12.0 : variant === 'exhale' ? 14.5 : variant === 'close' ? 18.5 : 16.5;
+
+        const partials = variant === 'hold'
+          ? [
+              // 停住時以無敲擊、緩慢浮現的低沉共鳴穩穩托住空間
+              { freq: baseFreq, gain: 0.44, decay: duration, attack: 0.45 },
+              { freq: baseFreq + 0.45, gain: 0.38, decay: duration * 0.96, attack: 0.45 },
+              { freq: baseFreq * 2.0, gain: 0.16, decay: duration * 0.60, attack: 0.35 },
+              { freq: baseFreq * 2.756, gain: 0.06, decay: duration * 0.38, attack: 0.30 }
+            ]
+          : variant === 'exhale'
+          ? [
+              // 吐氣時更低沉的 72 Hz 落地共振
+              { freq: baseFreq, gain: 0.46, decay: duration, attack: 0.28 },
+              { freq: baseFreq + 0.40, gain: 0.40, decay: duration * 0.96, attack: 0.28 },
+              { freq: baseFreq * 2.0, gain: 0.18, decay: duration * 0.62, attack: 0.22 },
+              { freq: baseFreq * 2.756, gain: 0.08, decay: duration * 0.42, attack: 0.18 }
+            ]
+          : [
+              // 吸氣／收尾主缽：108 Hz + 108.55 Hz 超慢速深沉拍頻
+              { freq: baseFreq, gain: 0.48, decay: duration, attack: 0.16 },
+              { freq: baseFreq + 0.55, gain: 0.42, decay: duration * 0.96, attack: 0.16 },
+              // 54 Hz 次低音胸腔共鳴
+              { freq: baseFreq * 0.5, gain: 0.20, decay: duration * 0.88, attack: 0.24 },
+              // 溫潤倍頻與緩慢頌缽泛音群
+              { freq: baseFreq * 2.0, gain: 0.12, decay: duration * 0.58, attack: 0.14 },
+              { freq: baseFreq * 2.756, gain: 0.09, decay: duration * 0.44, attack: 0.10 },
+              { freq: baseFreq * 2.756 + 0.9, gain: 0.06, decay: duration * 0.40, attack: 0.10 },
+              ...(variant === 'close'
+                ? [{ freq: baseFreq * 1.5, gain: 0.11, decay: duration * 0.75, attack: 0.28 }]
+                : [])
+            ];
+
+        partials.forEach(p => {
+          const osc = ctx.createOscillator();
+          const pGain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(p.freq, now);
+
+          pGain.gain.setValueAtTime(0.0001, now);
+          pGain.gain.linearRampToValueAtTime(p.gain, now + p.attack);
+          pGain.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+          osc.connect(pGain);
+          pGain.connect(lowpass);
+          osc.start(now);
+          osc.stop(now + p.decay + 0.15);
+        });
+
+        // 僅在吸氣與收尾加上極柔和慢速的厚毛氈觸碰起音
+        if (variant === 'deep' || variant === 'close') {
+          const malletOsc = ctx.createOscillator();
+          const malletGain = ctx.createGain();
+          malletOsc.type = 'sine';
+          malletOsc.frequency.setValueAtTime(115, now);
+          malletOsc.frequency.exponentialRampToValueAtTime(52, now + 0.14);
+
+          malletGain.gain.setValueAtTime(0.0001, now);
+          malletGain.gain.linearRampToValueAtTime(0.065, now + 0.03);
+          malletGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+          malletOsc.connect(malletGain);
+          malletGain.connect(masterGain);
+          malletOsc.start(now);
+          malletOsc.stop(now + 0.18);
+        }
+      } catch (e) {
+        // 忽略不支援 Web Audio 的舊版環境
+      }
+    }
 
     function smoothSetMusicVolume(targetVol, durationMs = 700) {
       const audio = document.getElementById('bgMusic');
@@ -695,7 +838,57 @@
       musicFadeFrame = requestAnimationFrame(tick);
     }
 
-    function updateMusicUI(isPlaying) {
+    // 開始呼吸時：若背景音樂正在播放，淡出並暫停音樂，改由頌缽取代
+    function pauseMusicForBreath() {
+      const audio = document.getElementById('bgMusic');
+      if (!audio) return;
+      if (breathFadeTimeout) {
+        clearTimeout(breathFadeTimeout);
+        breathFadeTimeout = null;
+      }
+      if (!audio.paused) {
+        musicPausedByBreath = true;
+        smoothSetMusicVolume(0, 550);
+        breathFadeTimeout = setTimeout(() => {
+          breathFadeTimeout = null;
+          if (breathActive && musicPausedByBreath) {
+            audio.pause();
+            updateMusicUI(false, true);
+          }
+        }, 580);
+      }
+    }
+
+    // 呼吸結束／暫停／離開時：若先前是因呼吸暫停音樂，則平緩恢復音樂播放
+    function resumeMusicAfterBreath() {
+      const audio = document.getElementById('bgMusic');
+      if (breathFadeTimeout) {
+        clearTimeout(breathFadeTimeout);
+        breathFadeTimeout = null;
+      }
+      if (!audio || !musicPausedByBreath) return;
+      musicPausedByBreath = false;
+
+      try {
+        audio.volume = 0;
+      } catch (e) {}
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise
+          .then(() => {
+            updateMusicUI(true);
+            smoothSetMusicVolume(BASE_VOLUME, 1000);
+          })
+          .catch(() => {
+            updateMusicUI(false);
+          });
+      } else {
+        updateMusicUI(true);
+        smoothSetMusicVolume(BASE_VOLUME, 1000);
+      }
+    }
+
+    function updateMusicUI(isPlaying, pausedForBowl = false) {
       const btn = document.getElementById('music-toggle-btn');
       const icon = document.getElementById('music-icon');
       const waves = document.getElementById('music-waves');
@@ -715,14 +908,14 @@
         btn.classList.add('border-sage/45', 'bg-sageLight/85');
         btn.classList.remove('border-sand', 'bg-white/95');
       } else {
-        icon.textContent = '🔇';
+        icon.textContent = pausedForBowl ? '🔔' : '🔇';
         waves.classList.remove('wave-playing');
         waves.classList.add('wave-paused');
         waves.querySelectorAll('.wave-bar').forEach(b => {
           b.classList.remove('bg-sage');
           b.classList.add('bg-muted/50');
         });
-        label.textContent = '靜音中 · 開啟音樂';
+        label.textContent = pausedForBowl ? '頌缽引導中 · 音樂暫停' : '靜音中 · 開啟音樂';
         btn.classList.remove('border-sage/45', 'bg-sageLight/85');
         btn.classList.add('border-sand', 'bg-white/95');
       }
@@ -763,10 +956,15 @@
       });
 
       toggleBtn.addEventListener('click', () => {
+        musicPausedByBreath = false;
+        if (breathFadeTimeout) {
+          clearTimeout(breathFadeTimeout);
+          breathFadeTimeout = null;
+        }
         if (audio.paused) {
           hideMusicError();
           try {
-            audio.volume = breathActive ? DUCK_VOLUME : BASE_VOLUME;
+            audio.volume = BASE_VOLUME;
           } catch (e) {}
           const playPromise = audio.play();
           if (playPromise && typeof playPromise.then === 'function') {
@@ -872,7 +1070,7 @@
       }
       if (breathActive) {
         breathActive = false;
-        smoothSetMusicVolume(BASE_VOLUME, 800);
+        resumeMusicAfterBreath();
       }
     }
 
@@ -1280,6 +1478,8 @@
       document.getElementById('start-integration-from-atlas').addEventListener('click', () => {
         state.wizard.stanceId = s.id;
         state.wizard.step = 1;
+        state.wizard.breathCompleted = false;
+        state.wizard.breathAfterFeel = '';
         state.wizard.claimedTraits = [];
         state.wizard.curiositySwitched = false;
         state.wizard.interrupted = false;
@@ -1293,102 +1493,174 @@
     // =========================================================================
     // 8. 渲染分頁二：六步自我整合引導
     // =========================================================================
-    const WIZARD_STEPS = [
-      { num: 1, label: '引導', full: '引導（Guidance）' },
-      { num: 2, label: '覺察', full: '覺察（Awareness｜NVC 觀察與感受）' },
-      { num: 3, label: '理解', full: '理解（Understanding｜冰山需要）' },
-      { num: 4, label: '內化', full: '內化（Internalization｜認領中性資源）' },
-      { num: 5, label: '轉變', full: '轉變（Transformation｜NAC 與請求）' },
-      { num: 6, label: '整合', full: '重新看待資源（整合卡）' }
+    const WIZARD_STEP_META = [
+      { step: 1, short: '1. 引導', title: '引導（Guidance）' },
+      { step: 2, short: '2. 覺察', title: '覺察（Awareness）' },
+      { step: 3, short: '3. 理解', title: '理解（Understanding）' },
+      { step: 4, short: '4. 內化', title: '內化（Internalization）' },
+      { step: 5, short: '5. 轉變', title: '轉變（Transformation）' },
+      { step: 6, short: '6. 重新看待', title: '重新看待資源（Reframing）' }
     ];
 
     function renderWizard() {
       const w = state.wizard;
-      if (w.step !== 1) stopBreathingIfNeeded();
-
-      const badge = document.getElementById('wizard-step-badge');
-      const title = document.getElementById('wizard-step-title');
-      const bars = document.getElementById('wizard-progress-bars');
-      const labels = document.getElementById('wizard-step-labels');
+      if (w.step !== 1) {
+        stopBreathingIfNeeded();
+      }
+      const s = STANCES[w.stanceId] || STANCES.placater;
       const body = document.getElementById('wizard-body');
+      const badge = document.getElementById('wizard-step-badge');
+      const titleEl = document.getElementById('wizard-step-title');
+      const barsEl = document.getElementById('wizard-progress-bars');
+      const labelsEl = document.getElementById('wizard-step-labels');
       const prevBtn = document.getElementById('wizard-prev-btn');
       const nextBtn = document.getElementById('wizard-next-btn');
 
-      if (!badge || !title || !bars || !labels || !body) return;
+      if (!body || !badge || !titleEl || !barsEl || !labelsEl || !prevBtn || !nextBtn) return;
 
-      const meta = WIZARD_STEPS[w.step - 1];
+      const currentMeta = WIZARD_STEP_META[w.step - 1] || WIZARD_STEP_META[0];
       badge.textContent = `步驟 ${w.step} / 6`;
-      title.textContent = meta.full;
+      titleEl.textContent = currentMeta.title;
 
-      bars.innerHTML = WIZARD_STEPS.map(st => `
-        <button
-          type="button"
-          data-jump-step="${st.num}"
-          aria-label="跳至步驟 ${st.num}：${st.label}"
-          class="h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
-            st.num < w.step ? 'bg-sage' : st.num === w.step ? 'bg-warmgold' : 'bg-sand'
-          }"
-        ></button>
-      `).join('');
+      barsEl.innerHTML = WIZARD_STEP_META.map(m => {
+        const done = m.step < w.step;
+        const current = m.step === w.step;
+        return `
+          <button
+            type="button"
+            data-jump-step="${m.step}"
+            title="${m.title}"
+            aria-label="跳至${m.title}"
+            class="h-2 rounded-full transition-all duration-300 cursor-pointer ${
+              current ? 'bg-sage ring-2 ring-sage/25' : done ? 'bg-sage/55 hover:bg-sage/75' : 'bg-sand hover:bg-muted/35'
+            }"
+          ></button>
+        `;
+      }).join('');
 
-      labels.innerHTML = WIZARD_STEPS.map(st => `
-        <span class="${st.num === w.step ? 'text-deepsea font-bold' : st.num < w.step ? 'text-sage font-semibold' : ''}">${st.num}. ${st.label}</span>
-      `).join('');
+      labelsEl.innerHTML = WIZARD_STEP_META.map(m => {
+        const active = m.step === w.step;
+        return `<span class="${active ? 'text-sage font-bold' : ''}">${m.short}</span>`;
+      }).join('');
 
-      bars.querySelectorAll('[data-jump-step]').forEach(b => {
-        b.addEventListener('click', () => {
-          w.step = Number(b.dataset.jumpStep);
+      barsEl.querySelectorAll('[data-jump-step]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          w.step = Number(btn.dataset.jumpStep);
           renderWizard();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         });
       });
 
       prevBtn.disabled = w.step === 1;
-      if (w.step === 6) {
-        nextBtn.textContent = '返回圖鑑探索';
-      } else {
-        nextBtn.textContent = '下一步 →';
-      }
+      nextBtn.textContent = w.step === 6 ? '完成探索 · 回到圖鑑' : '下一步 →';
 
-      const s = STANCES[w.stanceId] || STANCES.placater;
-
-      // --- 步驟 1：引導 (6-4-6 深呼吸 + 好奇眼鏡 + 選姿態) ---
+      // --- 步驟 1：引導 (方向一：呼吸前後覺察對照 + 6-4-6 深呼吸 + 頌缽聲) ---
       if (w.step === 1) {
+        const focusMeta = BREATH_FOCUS_OPTIONS.find(f => f.label === w.breathFocus) || BREATH_FOCUS_OPTIONS[4];
+        const afterMeta = BREATH_AFTER_OPTIONS.find(a => a.label === w.breathAfterFeel);
+
         body.innerHTML = `
           <div class="space-y-6 animate-fade-up">
             <div class="space-y-2">
-              <h2 class="font-serif text-lg sm:text-xl font-bold text-deepsea">先停下來，安頓自己，再用好奇心看看當下</h2>
+              <h2 class="font-serif text-lg sm:text-xl font-bold text-deepsea">先停下來，安頓自己，再用好奇心陪著此刻的感覺</h2>
               <p class="text-xs sm:text-sm text-muted leading-relaxed">
-                在開始整理之前，邀請你給自己三次緩慢的「6–4–6 深呼吸」（吸氣 6 秒 ➔ 停住 4 秒 ➔ 吐氣 6 秒）。接下來，請試著戴上「好奇而不批判」的眼鏡來認識此刻的自己。
+                在開始整理之前，邀請你先選一個最貼近現在的身體／心理感受焦點，接著跟著頌缽聲做三次「6–4–6 深呼吸」（呼吸時背景音樂會暫時停下來，把安靜的空間留給頌缽與你自己）。
               </p>
             </div>
 
-            <!-- 6-4-6 深呼吸互動區（進行時音樂自動降音 50%） -->
-            <div class="bg-linen rounded-3xl border border-sand p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-6">
-              <div class="relative w-32 h-32 flex items-center justify-center shrink-0">
-                <div
-                  id="breath-orb"
-                  class="breath-orb w-24 h-24 rounded-full bg-gradient-to-br from-sage/30 via-sageLight to-warmgold/25 border-2 border-sage/40 flex items-center justify-center shadow-inner"
-                >
-                  <span id="breath-phase-short" class="font-serif text-sm font-bold text-deepsea">準備好</span>
+            <!-- 方向一（呼吸前）：選擇此刻想陪的感覺 -->
+            <div class="bg-cream/65 rounded-2xl border border-sand p-4 space-y-2.5">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs sm:text-sm font-bold text-deepsea">1. 呼吸前，此刻比較想陪著哪一種感覺？</span>
+                <span class="text-[11px] text-muted">沒有對錯，只是選一個安放注意力的起點</span>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                ${BREATH_FOCUS_OPTIONS.map(opt => {
+                  const active = w.breathFocus === opt.label;
+                  return `
+                    <button
+                      type="button"
+                      data-breath-focus="${opt.label}"
+                      aria-pressed="${active ? 'true' : 'false'}"
+                      class="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${
+                        active
+                          ? 'bg-deepsea text-white border-deepsea shadow-xs'
+                          : 'bg-white hover:bg-warmgoldLight/70 text-ink border-sand'
+                      }"
+                    >
+                      ${opt.label}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <!-- 6-4-6 深呼吸互動區（進行時暫停背景音樂，以深沉頌缽取代） -->
+            <div class="bg-linen rounded-3xl border border-sand p-5 sm:p-6 space-y-5">
+              <div class="flex flex-col sm:flex-row items-center gap-6">
+                <div class="relative w-32 h-32 flex items-center justify-center shrink-0">
+                  <div
+                    id="breath-orb"
+                    class="breath-orb w-24 h-24 rounded-full bg-gradient-to-br from-sage/30 via-sageLight to-warmgold/25 border-2 border-sage/40 flex items-center justify-center shadow-inner"
+                  >
+                    <span id="breath-phase-short" class="font-serif text-sm font-bold text-deepsea">準備好</span>
+                  </div>
+                </div>
+                <div class="flex-1 text-center sm:text-left space-y-2.5">
+                  <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <span id="breath-cycle-badge" class="px-2.5 py-0.5 rounded-full bg-white border border-sand text-[11px] font-bold text-sage">3 次深呼吸 · 6-4-6 節奏</span>
+                    <span class="text-[11px] text-amber-900 bg-warmgoldLight/80 px-2.5 py-0.5 rounded-full border border-warmgold/30 font-medium">🔔 呼吸時音樂暫停，改以頌缽引導</span>
+                  </div>
+                  <p id="breath-guide-text" class="font-serif text-sm sm:text-base font-semibold text-ink leading-relaxed">
+                    準備陪著「${w.breathFocus}」一起深呼吸：吸氣 6 秒、停住 4 秒、吐氣 6 秒。
+                  </p>
+                  <div class="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+                    <button
+                      type="button"
+                      id="breath-toggle-btn"
+                      class="px-5 py-2 rounded-2xl bg-sage hover:bg-sage/90 text-white text-xs sm:text-sm font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+                    >
+                      ${breathActive ? '暫停深呼吸' : w.breathCompleted ? '再做一次 3 次深呼吸' : '開始 3 次深呼吸'}
+                    </button>
+                    <button
+                      type="button"
+                      id="bowl-preview-btn"
+                      class="px-3.5 py-2 rounded-2xl bg-white hover:bg-warmgoldLight border border-warmgold/40 text-amber-900 text-xs font-semibold transition-all active:scale-95 cursor-pointer"
+                    >
+                      🔔 試聽一聲頌缽
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div class="flex-1 text-center sm:text-left space-y-2.5">
-                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <span id="breath-cycle-badge" class="px-2.5 py-0.5 rounded-full bg-white border border-sand text-[11px] font-bold text-sage">3 次深呼吸 · 6-4-6 節奏</span>
-                  <span class="text-[11px] text-muted">呼吸期間音樂將自動柔聲 50%</span>
+
+              <!-- 方向一（呼吸後）：完成 3 次深呼吸後出現的非評斷覺察回饋 -->
+              <div id="breath-after-panel" class="${w.breathCompleted ? '' : 'hidden'} pt-4 border-t border-sand space-y-3 animate-fade-up">
+                <div class="text-xs sm:text-sm font-bold text-sage">2. 剛剛在頌缽與呼吸裡陪著「${w.breathFocus}」待了一會兒，現在感覺如何？（點選紀錄）</div>
+                <div class="flex flex-wrap gap-2">
+                  ${BREATH_AFTER_OPTIONS.map(opt => {
+                    const active = w.breathAfterFeel === opt.label;
+                    return `
+                      <button
+                        type="button"
+                        data-breath-after="${opt.label}"
+                        aria-pressed="${active ? 'true' : 'false'}"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${
+                          active
+                            ? 'bg-sage text-white border-sage shadow-xs'
+                            : 'bg-white hover:bg-sageLight/60 text-ink border-sand'
+                        }"
+                      >
+                        <span>${opt.icon}</span>
+                        <span>${opt.label}</span>
+                      </button>
+                    `;
+                  }).join('')}
                 </div>
-                <p id="breath-guide-text" class="font-serif text-sm sm:text-base font-semibold text-ink">
-                  按下按鈕後，跟著圓環一起緩緩吸氣 6 秒、停住 4 秒、吐氣 6 秒。
-                </p>
-                <div class="pt-1">
-                  <button
-                    type="button"
-                    id="breath-toggle-btn"
-                    class="px-5 py-2 rounded-2xl bg-sage hover:bg-sage/90 text-white text-xs sm:text-sm font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
-                  >
-                    ${breathActive ? '暫停深呼吸' : '開始 3 次深呼吸'}
-                  </button>
-                </div>
+                ${afterMeta ? `
+                  <div class="bg-white/90 rounded-2xl p-3.5 border border-sage/25 text-xs sm:text-sm text-ink leading-relaxed animate-fade-up">
+                    <span class="font-bold text-sage">🌿 覺察回應：</span>${afterMeta.reply}
+                  </div>
+                ` : ''}
               </div>
             </div>
 
@@ -1421,6 +1693,27 @@
           </div>
         `;
 
+        body.querySelectorAll('[data-breath-focus]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            w.breathFocus = btn.dataset.breathFocus;
+            if (!breathActive) {
+              renderWizard();
+            }
+          });
+        });
+
+        body.querySelectorAll('[data-breath-after]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            w.breathAfterFeel = btn.dataset.breathAfter;
+            renderWizard();
+          });
+        });
+
+        document.getElementById('bowl-preview-btn').addEventListener('click', () => {
+          playSingingBowl('deep');
+          showToast('深沉慢速頌缽共振中（108 Hz 緩慢微拍頻）⋯⋯', '🔔', 3000);
+        });
+
         const breathBtn = document.getElementById('breath-toggle-btn');
         const orb = document.getElementById('breath-orb');
         const phaseShort = document.getElementById('breath-phase-short');
@@ -1434,40 +1727,57 @@
             phaseShort.textContent = '已暫停';
             orb.style.transform = 'scale(1)';
             cycleBadge.textContent = '3 次深呼吸 · 6-4-6 節奏';
-            guideText.textContent = '隨時準備好都可以再次開始，沒有急著完成。';
+            guideText.textContent = '隨時準備好都可以再次開始，背景音樂也已柔和恢復。';
             return;
           }
 
           breathActive = true;
-          smoothSetMusicVolume(DUCK_VOLUME, 700);
+          w.breathCompleted = false;
+          const afterPanel = document.getElementById('breath-after-panel');
+          if (afterPanel) afterPanel.classList.add('hidden');
+
+          // 暫停背景音樂，以頌缽聲取代
+          pauseMusicForBreath();
           breathBtn.textContent = '暫停深呼吸';
 
+          const currentFocus = BREATH_FOCUS_OPTIONS.find(f => f.label === w.breathFocus) || BREATH_FOCUS_OPTIONS[4];
           const totalCycles = 3;
           let cycle = 1;
           let secInCycle = 0; // 0..15 (0-5吸氣6秒, 6-9停住4秒, 10-15吐氣6秒)
 
           function updateBreathFrame() {
             if (!breathActive) return;
-            cycleBadge.textContent = `第 ${cycle} / ${totalCycles} 次呼吸`;
+            cycleBadge.textContent = `第 ${cycle} / ${totalCycles} 次呼吸 · 頌缽陪伴中`;
 
             if (secInCycle < 6) {
               const remain = 6 - secInCycle;
               phaseShort.textContent = `吸氣 ${remain}s`;
-              guideText.textContent = `第 ${cycle} 次：鼻子緩緩吸氣（${remain} 秒）⋯⋯讓肩頸跟著鬆一點`;
               if (secInCycle === 0) {
+                playSingingBowl('deep');
                 orb.style.transform = 'scale(1.26)';
+              }
+              if (cycle === 1) {
+                guideText.textContent = `第 1 次（回到身體）：緩緩吸氣 ${remain} 秒——讓氣息告訴身體現在是安全的`;
+              } else if (cycle === 2) {
+                guideText.textContent = `第 2 次（陪著感覺）：吸氣 ${remain} 秒——${currentFocus.inhaleCue}`;
+              } else {
+                guideText.textContent = `第 3 次（溫柔同在）：吸氣 ${remain} 秒——感覺有一個溫柔的自己，正在陪著此刻有感覺的自己`;
               }
             } else if (secInCycle < 10) {
               const remain = 10 - secInCycle;
               phaseShort.textContent = `停住 ${remain}s`;
-              guideText.textContent = `第 ${cycle} 次：輕輕停住感受氣息（${remain} 秒）⋯⋯`;
+              if (secInCycle === 6) {
+                playSingingBowl('hold');
+              }
+              guideText.textContent = `第 ${cycle} 次：輕輕停住 ${remain} 秒——${currentFocus.holdCue}`;
             } else {
               const remain = 16 - secInCycle;
               phaseShort.textContent = `吐氣 ${remain}s`;
-              guideText.textContent = `第 ${cycle} 次：嘴巴慢慢吐氣（${remain} 秒）⋯⋯把緊繃交還給地面`;
               if (secInCycle === 10) {
+                playSingingBowl('exhale');
                 orb.style.transform = 'scale(0.92)';
               }
+              guideText.textContent = `第 ${cycle} 次：隨著低沉頌缽餘韻緩緩吐氣（${remain} 秒）⋯⋯把多餘的用力交還給地面`;
             }
           }
 
@@ -1480,11 +1790,15 @@
               cycle += 1;
               if (cycle > totalCycles) {
                 stopBreathingIfNeeded();
-                breathBtn.textContent = '再做一次 3 次深呼吸';
-                phaseShort.textContent = '完成了';
-                cycleBadge.textContent = '✨ 3 次呼吸已完成';
-                guideText.textContent = '很棒，你已經替自己打開了一個平靜的空間，背景音樂也已緩緩恢復。';
-                orb.style.transform = 'scale(1)';
+                playSingingBowl('close');
+                w.breathCompleted = true;
+                renderWizard();
+                const doneGuide = document.getElementById('breath-guide-text');
+                const doneBadge = document.getElementById('breath-cycle-badge');
+                const donePhase = document.getElementById('breath-phase-short');
+                if (doneBadge) doneBadge.textContent = '✨ 3 次頌缽呼吸已完成';
+                if (donePhase) donePhase.textContent = '完成了';
+                if (doneGuide) doneGuide.textContent = '很棒，收尾頌缽的餘韻正慢慢散開，請在下方記錄此刻的覺察變化。';
                 return;
               }
             }
@@ -1516,6 +1830,15 @@
                 在非暴力溝通（NVC）裡，我們先練習把「評價與自責」放下來，單純看清發生了什麼事，以及身體與心裡真實感受到什麼。
               </p>
             </div>
+
+            ${w.breathCompleted || w.breathAfterFeel ? `
+              <div class="bg-sageLight/55 rounded-2xl border border-sage/25 px-4 py-3 flex items-start gap-2.5 text-xs sm:text-sm text-ink">
+                <span class="text-base leading-none mt-0.5">🔔</span>
+                <p class="leading-relaxed">
+                  剛剛在頌缽與呼吸裡，你陪著「<strong class="text-deepsea">${w.breathFocus}</strong>」待了一會兒${w.breathAfterFeel ? `（感覺：<strong class="text-sage">${w.breathAfterFeel}</strong>）` : ''}；現在帶著這份安穩，一起看看下面更貼近哪幾種感受詞吧。
+                </p>
+              </div>
+            ` : ''}
 
             <!-- 好奇心開關（自責轉好奇） -->
             <div class="bg-gradient-to-r from-warmgoldLight/75 via-linen to-white rounded-3xl border border-warmgold/35 p-4 sm:p-5 space-y-3">
@@ -2132,6 +2455,9 @@
       state.wizard = {
         step: 1,
         stanceId: 'placater',
+        breathFocus: '先單純安頓自己',
+        breathCompleted: false,
+        breathAfterFeel: '',
         observation: '',
         feelings: [],
         activeBodySignals: [],
