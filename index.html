@@ -157,9 +157,9 @@
         </div>
       </div>
 
-      <!-- 四大主分頁導覽列 -->
+      <!-- 五大主分頁導覽列 -->
       <nav class="mt-3" aria-label="主要功能分頁">
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-2 bg-cream p-1.5 rounded-2xl border border-sand">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2 bg-cream p-1.5 rounded-2xl border border-sand">
           <button
             type="button"
             data-main-tab="atlas"
@@ -187,6 +187,13 @@
             class="main-tab-btn py-2.5 px-2 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer text-center"
           >
             四種姿態核心比較
+          </button>
+          <button
+            type="button"
+            data-main-tab="chakra"
+            class="main-tab-btn col-span-2 sm:col-span-1 py-2.5 px-2 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer text-center"
+          >
+            七大脈輪與花精地圖
           </button>
         </div>
       </nav>
@@ -308,6 +315,21 @@
       </div>
 
       <div id="compare-content"></div>
+    </section>
+
+    <!-- 分頁五：七大脈輪與花精地圖 -->
+    <section id="panel-chakra" class="hidden space-y-6 animate-fade-up">
+      <div class="bg-gradient-to-r from-sageLight via-cream to-warmgoldLight rounded-3xl border border-sage/25 p-5 sm:p-6 shadow-2xs flex items-start gap-4">
+        <div class="w-11 h-11 rounded-2xl bg-white/90 border border-sage/25 text-sage flex items-center justify-center text-xl shrink-0">🌸</div>
+        <div class="space-y-1.5">
+          <div class="text-xs font-bold tracking-wider text-sage">身心能量共振 · 薩提爾冰山 × 澳洲花晶自我照顧</div>
+          <p class="font-serif text-sm sm:text-base font-bold text-deepsea leading-relaxed">
+            情緒與防衛姿態都會在身體留下印記。從頂輪到海底輪，看見每一個身體緊繃背後的保護姿態與冰山渴望，搭配澳洲身體花晶（脈輪／淨化／支持系列）與光子系列，把高頻溫柔帶回身體深處。
+          </p>
+        </div>
+      </div>
+
+      <div id="chakra-content"></div>
     </section>
 
   </main>
@@ -1308,6 +1330,335 @@
       }
     ];
 
+    // 七大脈輪 ✕ 身心狀態、薩提爾冰山與澳洲花晶對照資料庫
+    const CHAKRA_DATA = [
+      {
+        id: 'crown',
+        num: '7️⃣',
+        numberLabel: '第 7 脈輪',
+        name: '頂輪',
+        englishName: 'Crown Chakra',
+        anatomy: '頭頂・大腦皮質・松果體',
+        colorHex: '#7B61A8',
+        colorBg: '#F4F0FA',
+        colorBorder: '#D5C7EC',
+        stanceTags: [
+          { id: 'computer', label: '📐 超理智' },
+          { id: 'distracter', label: '🎭 打岔' }
+        ],
+        primaryStanceId: 'computer',
+        suggestedBreathFocus: '腦袋停不下來',
+        lifeTheme: '「我與生命整體的連結」——靈性覺察、生命意義感、信任與臣服。',
+        bodySigns: '頭頂緊繃、精神耗竭、睡眠失調、感覺靈魂跟身體脫節（像飄在半空中）。',
+        imbalance: {
+          overTitle: '🔺 能量過度耗能',
+          overDesc: '陷入「超理智」或「高階打岔」——用玄妙的道理或過度思考逃避現實生活的感受，無法落地。',
+          underTitle: '🔻 能量阻塞不足',
+          underDesc: '覺得人生空虛、孤立無援、對未知充滿深層無意義感。'
+        },
+        icebergNeeds: ['意義感', '合一與歸屬', '對生命流動的信任'],
+        congruenceResource: '清明與臣服——明白自己不需要控制全宇宙，能安穩活在當下，對生命保持開放與好奇。',
+        essences: {
+          chakra: '身體花晶・脈輪系列｜七號彩光花波（7號）＋ 中脈彩光花波',
+          purify: '身體花晶・淨化系列｜純淨極光彩光花波（洗滌集體焦慮、回歸清澈覺知）',
+          support: '身體花晶・支持系列｜意識轉化彩光花波、恬美夢境彩光花波',
+          photon: '光子系列｜光子花鑰霜（擦於頭頂百會、耳前耳後與肩頸，幫助落地整合）',
+          howToUse: '取適量七號彩光花波敷於頭頂、髮際與雙手手腕，雙手搓揉後深嗅 3 次，最後在頭頂與後頸薄擦光子花鑰霜幫助身心落地。'
+        }
+      },
+      {
+        id: 'thirdeye',
+        num: '6️⃣',
+        numberLabel: '第 6 脈輪',
+        name: '眉心輪',
+        englishName: 'Third Eye Chakra',
+        anatomy: '眉心・額頭・腦下垂體・雙眼',
+        colorHex: '#3B5998',
+        colorBg: '#EDF2FA',
+        colorBorder: '#C3D3EE',
+        stanceTags: [
+          { id: 'computer', label: '📐 超理智' },
+          { id: 'placater', label: '🤝 討好' }
+        ],
+        primaryStanceId: 'computer',
+        suggestedBreathFocus: '腦袋停不下來',
+        lifeTheme: '「我如何看待世界與自己」——直覺洞察、看清真相、超越頭腦幻象。',
+        bodySigns: '眉頭深鎖、偏頭痛、眼睛乾澀疲勞、腦袋像開了二十個視窗停不下來。',
+        imbalance: {
+          overTitle: '🔺 能量過度緊抓',
+          overDesc: '典型的「超理智」或「焦慮型預演」——把想像出來的恐懼當成事實（隧道視野），只相信冷硬邏輯、不相信內在直覺。',
+          underTitle: '🔻 能量阻塞不足',
+          underDesc: '容易迷惘、看不清方向、不敢相信自己的判斷，總依賴別人給標準答案。'
+        },
+        icebergNeeds: ['清晰', '洞見', '方向感', '安全感'],
+        congruenceResource: '洞察力與遠見——能跳出「我沒辦法」的死胡同，既擁有客觀判斷力，也能聽見內在直覺看見更多新可能。',
+        essences: {
+          chakra: '身體花晶・脈輪系列｜六號彩光花波（6號）＋ 氣結釋放彩光花波',
+          purify: '身體花晶・淨化系列｜能量場淨化彩光花波（清理思緒雜訊與環境紛擾）',
+          support: '身體花晶・支持系列｜意識轉化彩光花波、學習力彩光花波',
+          photon: '光子系列｜光子眼膠（舒緩眼周與眉心緊繃）＋ 光子花鑰霜',
+          howToUse: '取六號彩光花波輕敷額頭、眉心、太陽穴與耳後，雙手搓熱嗅吸；眼周與眉頭再點擦光子眼膠放鬆過度運轉的腦袋。'
+        }
+      },
+      {
+        id: 'throat',
+        num: '5️⃣',
+        numberLabel: '第 5 脈輪',
+        name: '喉輪',
+        englishName: 'Throat Chakra',
+        anatomy: '喉嚨・頸部・甲狀腺・肩頸',
+        colorHex: '#2E86AB',
+        colorBg: '#EAF5FA',
+        colorBorder: '#BCE0EE',
+        stanceTags: [
+          { id: 'placater', label: '🤝 討好' },
+          { id: 'blamer', label: '⚡ 指責' },
+          { id: 'distracter', label: '🎭 打岔' }
+        ],
+        primaryStanceId: 'placater',
+        suggestedBreathFocus: '胸口悶悶緊緊的',
+        lifeTheme: '「我敢不敢真實表達自己」——真誠溝通、說出界線、傾聽自己與他人。',
+        bodySigns: '喉嚨卡卡像有異物、聲音緊縮微弱（或異常尖銳大聲）、肩頸僵硬、常清喉嚨。',
+        imbalance: {
+          overTitle: '🔺 能量暴衝（噴出來）',
+          overDesc: '「指責」或「打岔」——用強勢命令、批判壓過別人的聲音，或不停講無關的笑話填滿沉默。',
+          underTitle: '🔻 能量阻塞（吞下去）',
+          underDesc: '「討好」或「鬱悶」——怕得罪人、怕衝突，把委屈和真心話全部吞回肚子裡，嘴上只說「沒關係、都可以」。'
+        },
+        icebergNeeds: ['被聽見', '被理解', '尊重', '自主表達的空間'],
+        congruenceResource: '真誠表達（NVC）——能溫和而堅定地說出「我的感受、需要與請求」，不討好委屈，也不攻擊傷人。',
+        essences: {
+          chakra: '身體花晶・脈輪系列｜五號彩光花波（5號）＋ 氣結釋放彩光花波',
+          purify: '身體花晶・淨化系列｜能量場淨化彩光花波（提升溝通和諧與能量流動）',
+          support: '身體花晶・支持系列｜彩虹光體彩光花波、意識轉化彩光花波',
+          photon: '光子系列｜光子花鑰霜（重點塗抹喉嚨兩側、鎖骨與僵硬肩頸）',
+          howToUse: '將五號彩光花波敷於喉嚨前側、後頸大椎與雙肩，嗅吸後厚敷一層光子花鑰霜並輕揉肩頸，鬆開吞下去的委屈。'
+        }
+      },
+      {
+        id: 'heart',
+        num: '4️⃣',
+        numberLabel: '第 4 脈輪',
+        name: '心輪',
+        englishName: 'Heart Chakra',
+        anatomy: '胸口・心臟・肺部・胸腺',
+        colorHex: '#4E7D6E',
+        colorBg: '#E7F0EC',
+        colorBorder: '#BDD7CC',
+        stanceTags: [
+          { id: 'placater', label: '🤝 討好' },
+          { id: 'computer', label: '📐 超理智' },
+          { id: 'blamer', label: '⚡ 指責' }
+        ],
+        primaryStanceId: 'placater',
+        suggestedBreathFocus: '胸口悶悶緊緊的',
+        lifeTheme: '「我如何愛人與接納自己」——無條件的愛、同理心、悲傷的釋放與自我慈悲。',
+        bodySigns: '胸口悶悶沉沉、呼吸很淺（吸不到底）、心悸、常無意識嘆氣、背痛（膏肓緊繃）。',
+        imbalance: {
+          overTitle: '🔺 過度外放（漏電）',
+          overDesc: '「討好」——把愛全給了別人，在關係裡過度付出、替所有人扛情緒，卻唯獨把「自己（1/3）」忘在角落。',
+          underTitle: '🔻 封閉防禦（築牆）',
+          underDesc: '「超理智」或「指責」——因為曾受過傷、怕再次失落，乾脆把心門鎖起來，用冷漠或挑剔來保護脆弱的心。'
+        },
+        icebergNeeds: ['愛與被愛', '接納', '歸屬感', '溫暖的連結'],
+        congruenceResource: '同理心與自我關愛——在愛別人的同時，也留 1/3 的溫柔給自己；允許心裡的悲傷被溫柔接住。',
+        essences: {
+          chakra: '身體花晶・脈輪系列｜四號彩光花波（4號）＋ 氣結釋放彩光花波',
+          purify: '身體花晶・淨化系列｜基因淨化彩光花波（釋放胸口與家族關係舊印記）',
+          support: '身體花晶・支持系列｜彩虹光體彩光花波、恬美夢境彩光花波',
+          photon: '光子系列｜光子玫瑰純淨露 ＋ 光子花鑰霜（溫柔撫胸口與上背膏肓）',
+          howToUse: '取四號彩光花波敷於胸口正中央、腋下淋巴與上背，手掌輕撫心口深呼吸；搭配光子玫瑰純淨露與花鑰霜滋養自我接納。'
+        }
+      },
+      {
+        id: 'solar',
+        num: '3️⃣',
+        numberLabel: '第 3 脈輪',
+        name: '太陽神經叢／胃輪',
+        englishName: 'Solar Plexus Chakra',
+        anatomy: '胃部・上腹・肝膽・橫膈膜',
+        colorHex: '#C89648',
+        colorBg: '#FBF3E4',
+        colorBorder: '#E7CFA4',
+        stanceTags: [
+          { id: 'blamer', label: '⚡ 指責' },
+          { id: 'placater', label: '🤝 討好' }
+        ],
+        primaryStanceId: 'blamer',
+        suggestedBreathFocus: '心裡有點酸或沉',
+        lifeTheme: '「我的力量與自我價值在哪裡」——自信、個人力量、界線感、行動魄力。',
+        bodySigns: '胃部緊縮、胃痛脹氣、消化不良、橫膈膜卡住、一緊張肚子就不舒服。',
+        imbalance: {
+          overTitle: '🔺 過度膨脹（外強中乾）',
+          overDesc: '「指責」——深怕失控或被看輕，於是透過控制、高要求、強勢生氣來證明自己有力量。',
+          underTitle: '🔻 能量塌陷（自我否定）',
+          underDesc: '「討好」或「自責」——覺得「我好沒用、都是我的錯」，把自我價值的裁判權完全交給別人。'
+        },
+        icebergNeeds: ['自我價值感', '尊重', '自主權', '掌控與秩序'],
+        congruenceResource: '果斷、自信與負責——不需要靠控制別人來求安全，也不必靠委屈求全來換取認可，穩穩站在自己的價值上。',
+        essences: {
+          chakra: '身體花晶・脈輪系列｜三號彩光花波（3號）＋ 中脈彩光花波',
+          purify: '身體花晶・淨化系列｜能量保護彩光花波（強化個人氣場邊界、不被外界干擾）',
+          support: '身體花晶・支持系列｜財運之星彩光花波（顯化自信與自我價值行動力）',
+          photon: '光子系列｜光子花鑰霜（順時針輕揉上腹胃部與兩側肋骨下緣）',
+          howToUse: '取三號彩光花波敷於心窩下方胃輪處與中背，雙手嗅吸後以光子花鑰霜順時針輕撫上腹，讓橫膈膜與力量感重新舒展。'
+        }
+      },
+      {
+        id: 'sacral',
+        num: '2️⃣',
+        numberLabel: '第 2 脈輪',
+        name: '臍輪／腹輪',
+        englishName: 'Sacral Chakra',
+        anatomy: '下腹丹田・骨盆・生殖系統・泌尿系統',
+        colorHex: '#D17A46',
+        colorBg: '#FDF0E8',
+        colorBorder: '#EDC6AE',
+        stanceTags: [
+          { id: 'computer', label: '📐 超理智' },
+          { id: 'distracter', label: '🎭 打岔' }
+        ],
+        primaryStanceId: 'distracter',
+        suggestedBreathFocus: '說不上來但卡卡的',
+        lifeTheme: '「我允不允許情緒與感受自然流動」——感受力、親密關係、創造力、喜悅與彈性。',
+        bodySigns: '下腹冰冷或緊繃、腰痠背痛、骨盆僵硬、生理期不適、情緒像雲霄飛車或完全麻木。',
+        imbalance: {
+          overTitle: '🔺 焦躁逃避（失衡波動）',
+          overDesc: '「打岔」——無法承受親密關係裡真實的脆弱或沉重感，一有情緒張力就想逃跑或找刺激分心。',
+          underTitle: '🔻 壓抑凍結（關閉感受）',
+          underDesc: '「超理智」——覺得「情緒是危險、麻煩的」，強迫自己壓下所有喜怒哀樂，連快樂都不敢放心享受。'
+        },
+        icebergNeeds: ['情緒被允許流動', '親密與接納', '彈性', '創造與玩樂'],
+        congruenceResource: '感受力與靈活創意思維——允許任何情緒在體內自然來去而不批判，能享受親密也能保有健康彈性。',
+        essences: {
+          chakra: '身體花晶・脈輪系列｜二號彩光花波（2號）＋ 氣結釋放彩光花波',
+          purify: '身體花晶・淨化系列｜基因淨化彩光花波（釋放關係創傷與凍結情緒印記）',
+          support: '身體花晶・支持系列｜彩虹光體彩光花波、財運之星彩光花波',
+          photon: '光子系列｜光子花鑰霜（溫暖敷擦下腹丹田、腹股溝與後腰薦椎）',
+          howToUse: '將二號彩光花波敷於肚臍下方三指丹田處、下腹兩側與後腰，雙手搓暖後擦上光子花鑰霜，溫柔喚醒情緒與創造力的流動。'
+        }
+      },
+      {
+        id: 'root',
+        num: '1️⃣',
+        numberLabel: '第 1 脈輪',
+        name: '海底輪',
+        englishName: 'Root Chakra',
+        anatomy: '尾椎・骨盆底・雙腿雙腳・腎上腺',
+        colorHex: '#BA5A4A',
+        colorBg: '#F9ECEA',
+        colorBorder: '#E5BEB8',
+        stanceTags: [
+          { id: 'placater', label: '🤝 討好' },
+          { id: 'blamer', label: '⚡ 指責' },
+          { id: 'computer', label: '📐 超理智' },
+          { id: 'distracter', label: '🎭 打岔' }
+        ],
+        primaryStanceId: 'placater',
+        suggestedBreathFocus: '先單純安頓自己',
+        lifeTheme: '「我在這個世界上安全嗎？」——生存安全感、身體扎根、基本的信任與穩定。',
+        bodySigns: '手腳冰冷、雙腿發軟或浮浮的（沒踩在地上）、莫名恐慌心慌、慢性疲勞、坐立難安。',
+        imbalance: {
+          overTitle: '🚨 生存警報長鳴（四種防衛姿態的總源頭）',
+          overDesc: '因為底層覺得「世界好危險、我隨時會失去立足之地」，神經系統被迫啟動討好、指責、超理智或打岔來保命。',
+          underTitle: '🔻 失根漂浮（能量耗竭）',
+          underDesc: '缺乏行動力與安全感，容易陷入恐慌、無力或過度擔憂生存與資源匱乏。'
+        },
+        icebergNeeds: ['最根本的生存安全感', '穩定', '被大地與環境穩穩托住'],
+        congruenceResource: '定錨、篤定與無懼——雙腳踏實踩在當下，知道「此時此刻我是安全的，我有資源可以一步步應對」。',
+        essences: {
+          chakra: '身體花晶・脈輪系列｜一號彩光花波（1號）＋ 氣結釋放彩光花波',
+          purify: '身體花晶・淨化系列｜純淨極光彩光花波（洗滌深層生存恐懼與焦慮）',
+          support: '身體花晶・支持系列｜財運之星彩光花波、中脈彩光花波',
+          photon: '光子系列｜光子花鑰霜（經典「一號＋氣結＋花鑰霜」三寶塗抹尾椎與腳底湧泉）',
+          howToUse: '將一號與氣結釋放彩光花波敷於尾椎、雙腿膝窩與腳底湧泉穴，嗅吸後薄擦光子花鑰霜，雙腳踩穩地面感受大地承托。'
+        }
+      }
+    ];
+
+    // 澳洲花晶四大系列型錄總覽（參考情緒花園 sentimentgarden.com）
+    const FLOWER_ESSENCE_SERIES = [
+      {
+        id: 'chakra-series',
+        name: '身體花晶｜脈輪系列',
+        badge: '對應 1～7 脈輪與氣脈疏通',
+        summary: '結合花朵、礦物水晶與色彩光波共振，直接塗敷於對應脈輪部位與身體氣結處，鬆開凍結情緒印記。',
+        items: [
+          { title: '一號～七號彩光花波', desc: '1 號重燃海底輪安全感與行動力；2 號釋放生殖輪關係創傷；3 號建立太陽神經叢自信界線；4 號滋養心輪自愛與接納；5 號暢通喉輪真誠溝通；6 號啟發眉心輪洞見直覺；7 號整合頂輪信任與臣服。' },
+          { title: '氣結釋放彩光花波', desc: '暢通全身氣脈、洗滌當下或過往累積的情緒印記，鬆開凍結能量與恐懼記憶，適合敷於關節、淋巴與緊繃痠痛處。' },
+          { title: '中脈彩光花波', desc: '打通脊椎任督二脈的生命之氣，調頻定心、幫助靜心凝神與專注放鬆，把人帶回穩固的核心立足點。' }
+        ]
+      },
+      {
+        id: 'purify-series',
+        name: '身體花晶｜淨化系列',
+        badge: '清理氣場干擾與舊有印記',
+        summary: '當情緒過度承載、容易受他人氣場影響，或反覆陷入舊防衛慣性時，協助洗滌內外場域的沉重頻率。',
+        items: [
+          { title: '純淨極光彩光花波', desc: '以純淨白光共振洗滌集體意識的生存恐懼與焦慮，平衡深層暗潮，找回肉體與情緒體的清澈覺知。' },
+          { title: '能量場淨化彩光花波', desc: '清理個人氣場與空間的紛擾頻率，排解因壓抑情緒造成的能量淤塞，促進人際溝通與和諧共識。' },
+          { title: '能量保護彩光花波', desc: '補強脆弱暗沉的氣場，為高敏感或容易過度「討好吸收他人情緒」的人建立健康的能量防護界線。' },
+          { title: '基因淨化彩光花波', desc: '鬆開深植的家族負面信念與重複性慣性模式，為身心打造新的修護藍圖。' }
+        ]
+      },
+      {
+        id: 'support-series',
+        name: '身體花晶｜支持系列',
+        badge: '強化內在驅力與日常支持',
+        summary: '針對意識轉化、安眠靜心、專注學習與豐盛顯化提供溫柔的能量支持，陪伴新習慣在生活裡落地。',
+        items: [
+          { title: '意識轉化彩光花波', desc: '敷於上四輪（心、喉、眉心、頂輪），協助跳脫舊有負面思考迴路，看清方向並聚焦清晰的新選擇。' },
+          { title: '恬美夢境彩光花波', desc: '滌淨多慮不安的雜亂思緒，釋放潛意識壓力與恐懼，帶來深層平和與安穩睡眠。' },
+          { title: '財運之星 · 學習力 · 彩虹光體', desc: '財運之星強化自我價值與行動顯化；學習力提升專注統合；彩虹光體全面協調七大脈輪光頻。' }
+        ]
+      },
+      {
+        id: 'photon-series',
+        name: '光子系列｜日常滋養共振',
+        badge: '搭配花晶「滴、敷、嗅」加乘',
+        summary: '沿用身體花晶製作工藝調製成日常保養質地，單擦即可平衡能量，與彩光花波疊擦更能封存並放大共振效益。',
+        items: [
+          { title: '光子花鑰霜（花霜）', desc: '蘊含超過 40 種花朵高頻能量，鬆開身心僵固模式；「彩光花波敷到哪，花霜就擦到哪」，加強淋巴與關節循環。' },
+          { title: '寶寶光子霜', desc: '質地極為溫和純淨，適合肌膚敏感者或想溫柔呵護內在小孩時替代光子花鑰霜使用。' },
+          { title: '光子玫瑰純淨露 & 光子眼膠', desc: '玫瑰純淨露柔和滋養心輪與氣場；光子眼膠舒緩眉心輪過度用腦、眼周疲勞與緊鎖的眉頭。' }
+        ]
+      }
+    ];
+
+    // 花精自我照顧：與身體對話的五步靜心儀式
+    const ESSENCE_RITUAL_STEPS = [
+      {
+        step: '01',
+        title: '靜心安頓 · 讓呼吸帶你回到身體',
+        action: '（動作：找一個安穩的姿勢坐好或站穩，輕輕閉上眼睛，雙手自然垂放，做三次緩慢而深長的呼吸）',
+        dialogue: '「我把向外忙碌的注意力慢慢收回來，專注在自己身上。感受空氣溫柔流進鼻腔、胸口與腹部，在這一刻，我給自己一份溫暖與無條件的接納。」'
+      },
+      {
+        step: '02',
+        title: '敞開允許 · 不批判任何浮現的波動',
+        action: '（動作：保持肩膀放鬆，不急著分析對錯，只是像觀察天空的雲一樣，允許身體裡任何念頭、情緒或微細感受自然浮現）',
+        dialogue: '「我允許任何情緒、念頭或感受，此刻在我的身體裡自然流動。不需要趕走它，也不需要假裝沒事，它現在出現在這裡是完全被允許的。」'
+      },
+      {
+        step: '03',
+        title: '溫柔觸碰 · 對有感覺的部位說「我看到你了」',
+        action: '（動作：當一個念頭、情緒或緊繃感浮現時，將溫熱的手掌輕輕撫在胸口，或直接覆蓋在身體最有感覺、最緊繃的部位上）',
+        dialogue: '「我看到你了。原來你一直在這裡替我承受、提醒我，我已經看見你的存在了。」'
+      },
+      {
+        step: '04',
+        title: '感恩陪伴 · 讓孤單的情緒被穩穩接住',
+        action: '（動作：掌心維持著溫暖的貼合與微微的重量，不急著移開，跟著呼吸多停留幾秒鐘）',
+        dialogue: '「謝謝你，我感受到你了，謝謝你的出現。你不用再一個人躲在身體裡孤軍奮戰，我現在就在這裡，會好好陪著你。」'
+      },
+      {
+        step: '05',
+        title: '花晶共振 · 透過「滴、敷、嗅」把支持送進身體',
+        action: '（動作：取對應脈輪的身體花晶滴在掌心，輕柔敷上剛才手掌撫觸的部位，雙手搓揉後湊近鼻前深吸三口花晶頻率，最後薄擦一層光子花鑰霜封存能量）',
+        dialogue: '「我把這份大自然的清澈頻率與愛意送進身體深處，讓緊繃慢慢鬆開，陪伴自己回到安穩、流動與一致。」'
+      }
+    ];
+
     // =========================================================================
     // 2. 應用程式全域狀態
     // =========================================================================
@@ -1323,6 +1674,8 @@
       lexiconSelectedWord: '焦慮',
       lexiconSearch: '',
       vocabCategory: 'all',
+      selectedChakraId: 'heart',
+      essenceSeriesId: 'chakra-series',
       wizard: {
         step: 1,
         stanceId: 'placater',
@@ -1440,8 +1793,8 @@
         const { voice, isMale } = selectDeepMaleVoice();
         if (voice) utter.voice = voice;
         utter.lang = voice ? voice.lang : 'zh-TW';
-        utter.rate = voice ? (isMale ? 0.65 : 0.76) : 0.68;   // 男聲語速放慢更顯沉穩從容，留出更多呼吸空間
-        utter.pitch = voice ? (isMale ? 0.86 : 0.94) : 0.62;  // YunJhe 沉穩微降；HsiaoChen 保持溫潤自然；系統預設則壓低模擬低沉
+        utter.rate = voice ? (isMale ? 0.65 : 0.76) : 0.68;
+        utter.pitch = voice ? (isMale ? 0.86 : 0.94) : 0.62;
         utter.volume = 0.90;
         window.speechSynthesis.speak(utter);
       } catch (e) {}
@@ -1468,7 +1821,6 @@
         }
         const startTime = performance.now();
         function step(now) {
-          // Ensure elapsed time and progress stay within [0, 1] even if rAF timestamp precedes startTime
           const elapsed = Math.max(0, now - startTime);
           const progress = Math.max(0, Math.min(1, elapsed / durationMs));
           const nextVol = startVol + (clampedTarget - startVol) * progress;
@@ -1595,7 +1947,6 @@
         lowpass.connect(masterGain);
         masterGain.connect(bowlAudioCtx.destination);
 
-        // 三段對應頻率：吸氣 108Hz ➔ 停住 81Hz（無敲擊感承接）➔ 吐氣 72Hz（沉穩落地）
         let baseFreq = 108;
         let beatDelta = 0.45;
         let duration = 17.5;
@@ -1607,7 +1958,7 @@
           baseFreq = 81;
           beatDelta = 0.40;
           duration = 12.0;
-          attackTime = 0.65; // 停住階段無敲擊感，緩緩浮現承接餘韻
+          attackTime = 0.65;
           peakGain = 0.25;
           hasStrike = false;
         } else if (phase === 'exhale') {
@@ -1623,7 +1974,6 @@
         masterGain.gain.linearRampToValueAtTime(peakGain, now + attackTime);
         masterGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
-        // 雙基頻微幅拍頻（產生水波般緩慢共振）+ 胸腔次低音 + 青銅泛音群
         const partials = [
           { freq: baseFreq, amp: 0.50, decay: duration },
           { freq: baseFreq + beatDelta, amp: 0.46, decay: duration * 0.96 },
@@ -1648,7 +1998,6 @@
           osc.stop(now + p.decay + 0.1);
         });
 
-        // 柔軟毛氈輕觸起音（僅在吸氣與吐氣加入極低沉的包絡觸感）
         if (hasStrike) {
           const strikeOsc = bowlAudioCtx.createOscillator();
           const strikeGain = bowlAudioCtx.createGain();
@@ -1809,7 +2158,8 @@
         atlas: document.getElementById('panel-atlas'),
         wizard: document.getElementById('panel-wizard'),
         lexicon: document.getElementById('panel-lexicon'),
-        compare: document.getElementById('panel-compare')
+        compare: document.getElementById('panel-compare'),
+        chakra: document.getElementById('panel-chakra')
       };
       Object.entries(panels).forEach(([key, el]) => {
         if (!el) return;
@@ -1824,6 +2174,7 @@
       if (tabId === 'wizard') renderWizard();
       if (tabId === 'lexicon') renderLexicon();
       if (tabId === 'compare') renderCompare();
+      if (tabId === 'chakra') renderChakra();
     }
 
     // =========================================================================
@@ -2198,7 +2549,6 @@
 
         bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
-            <!-- 先呼吸引導：回到身體、順著感覺 -->
             <div class="bg-linen rounded-3xl border border-sand p-5 sm:p-6 space-y-5">
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="space-y-1">
@@ -2213,7 +2563,6 @@
                 >🔔 試聽一聲頌缽</button>
               </div>
 
-              <!-- 呼吸前覺察焦點 -->
               <div class="space-y-2">
                 <div class="text-xs font-bold text-deepsea">現在呼吸前，比較想陪著身體或心裡的哪一種感覺？</div>
                 <div class="flex flex-wrap gap-2">
@@ -2234,7 +2583,6 @@
                 </div>
               </div>
 
-              <!-- 節奏選擇（6-4-6 / 8-4-8 / 10-4-10） -->
               <div class="space-y-2">
                 <div class="text-xs font-bold text-deepsea">選擇適合此刻肺活量的呼吸節奏：</div>
                 <div class="flex flex-wrap gap-2">
@@ -2259,7 +2607,6 @@
                 </div>
               </div>
 
-              <!-- 語音引導開關與音色測試 -->
               <div class="bg-white/85 rounded-2xl border border-sand p-3.5 flex flex-wrap items-center justify-between gap-2.5">
                 <div class="flex flex-wrap items-center gap-2">
                   <button
@@ -2296,7 +2643,6 @@
                 >🔉 試聽引導語音</button>
               </div>
 
-              <!-- 呼吸圓環與身體路徑進度 -->
               <div class="flex flex-col items-center text-center space-y-4 py-2">
                 <div class="flex flex-wrap justify-center gap-1.5 text-[11px]">
                   <span id="body-path-1" class="px-2.5 py-1 rounded-full bg-white border border-sand text-muted font-medium">第 1 輪：鼻腔 ➔ 肺部・胸口</span>
@@ -2325,7 +2671,6 @@
                 >🌬️ 開始 3 次深呼吸</button>
               </div>
 
-              <!-- 呼吸後非評斷覺察回饋 -->
               ${w.breathCompleted ? `
                 <div class="pt-4 border-t border-sand space-y-2.5 animate-fade-up">
                   <div class="text-xs font-bold text-sage">✨ 剛陪自己呼吸完三次，身體或心裡現在感覺如何？（可點選）</div>
@@ -2354,7 +2699,6 @@
               ` : ''}
             </div>
 
-            <!-- 接著：選擇本次想要探索的保護姿態 -->
             <div class="space-y-3">
               <div class="space-y-1">
                 <div class="text-xs font-bold text-deepsea">第二步 · 戴上「好奇而不批判」的眼鏡，選擇此刻最接近你的保護姿態</div>
@@ -2387,7 +2731,6 @@
           </div>
         `;
 
-        // 綁定步驟 1 事件
         bodyEl.querySelectorAll('[data-breath-focus]').forEach(btn => {
           btn.addEventListener('click', () => {
             if (breathActive) return;
@@ -2618,7 +2961,6 @@
               </div>
             ` : ''}
 
-            <!-- 好奇心開關 -->
             <div class="bg-warmgoldLight/60 rounded-2xl border border-warmgold/35 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="space-y-1">
                 <div class="text-xs font-bold text-deepsea">🔍 覺察前的好奇心開關（從自責切換到理解）</div>
@@ -2637,7 +2979,6 @@
               >${w.curiositySwitched ? '✨ 已開啟好奇視角' : '點亮好奇視角 ➔'}</button>
             </div>
 
-            <!-- 1. NVC 客觀觀察 -->
             <div class="space-y-2.5">
               <label for="wiz-observation-input" class="block text-sm font-bold text-deepsea">
                 1. 發生了什麼事？（NVC 客觀觀察：像攝影機一樣描述事實，不帶評斷）
@@ -2659,14 +3000,12 @@
               >${escapeHTML(w.observation)}</textarea>
             </div>
 
-            <!-- 2. 身體氣象複選開關 + 單色深淺共鳴情緒標籤 -->
             <div class="space-y-3">
               <div class="space-y-1">
                 <div class="text-sm font-bold text-deepsea">2. 表層應對背後的真實情緒感受（可複選）</div>
                 <p class="text-xs text-muted">先點選身體的微訊號（可多選開關），多個身體部位同時指向的感受會自動加深為飽和暖金色，幫你一眼看見核心情緒。</p>
               </div>
 
-              <!-- 身體氣象開關列 -->
               <div class="bg-linen rounded-2xl border border-sand p-3.5 space-y-2">
                 <div class="text-xs font-bold text-sage">🫀 先從「身體氣象」找線索（可點亮或取消複選）：</div>
                 <div class="flex flex-wrap gap-2">
@@ -2687,7 +3026,6 @@
                 </div>
               </div>
 
-              <!-- 單色深淺共鳴感受標籤 -->
               <div class="flex flex-wrap gap-2 pt-1">
                 ${NVC_FEELING_TAGS.map(tag => {
                   const bodyCount = getFeelingBodyCount(tag);
@@ -2716,7 +3054,6 @@
                 }).join('')}
               </div>
 
-              <!-- 自訂感受補充 -->
               <div class="flex gap-2 max-w-md pt-1">
                 <input
                   id="wiz-custom-feeling"
@@ -2937,7 +3274,6 @@
 
         bodyEl.innerHTML = `
           <div class="space-y-6 animate-fade-up">
-            <!-- NAC 模式中斷按鈕（點擊後才浮現該模式專屬好奇句） -->
             <div class="bg-clayLight/55 rounded-2xl border border-clay/30 p-4 sm:p-5 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="text-xs font-bold text-clay">⚡ NAC 神經鏈調整術 · 溫柔打破自動化慣性</div>
@@ -2961,7 +3297,6 @@
               ` : ''}
             </div>
 
-            <!-- 痛苦與快樂槓桿對照 -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
                 <div class="text-xs font-bold text-clay">若繼續沿用舊防衛模式的代價</div>
@@ -2973,7 +3308,6 @@
               </div>
             </div>
 
-            <!-- 新神經鏈力量宣言 -->
             <div class="space-y-2">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <label for="wiz-declaration-input" class="text-sm font-bold text-deepsea">
@@ -2983,7 +3317,7 @@
                   type="button"
                   id="goto-vocab-from-step5"
                   class="text-xs font-semibold text-warmgold hover:underline cursor-pointer"
-                >🌱 詞彙匱乏嗎？去「正負向詞彙對照」挑一句 ➔</button>
+                >🌱 詞彙匱乏嗎？去「情緒詞庫與語言轉化」挑一句 ➔</button>
               </div>
               <textarea
                 id="wiz-declaration-input"
@@ -2992,7 +3326,6 @@
               >${escapeHTML(declValue)}</textarea>
             </div>
 
-            <!-- NVC 具體可行請求 -->
             <div class="space-y-2">
               <label for="wiz-request-input" class="block text-sm font-bold text-deepsea">
                 2. NVC 溫和而具體的下一步行動／請求
@@ -3004,7 +3337,6 @@
               >${escapeHTML(reqValue)}</textarea>
             </div>
 
-            <!-- 🪞 老手深度盲區鏡 -->
             <div>
               <button
                 type="button"
@@ -3207,7 +3539,6 @@
       const isNegative = state.lexiconPolarity === 'negative';
       const groups = isNegative ? LEXICON_NEGATIVE_GROUPS : LEXICON_POSITIVE_GROUPS;
 
-      // 共用搜尋：同時檢索「情緒單字」與「自我懷疑改寫句」
       let wordHits = [];
       let sentenceHits = [];
       if (keyword) {
@@ -3261,10 +3592,8 @@
 
       container.innerHTML = `
         <div class="space-y-5">
-          <!-- 頂部雙模式切換膠囊 + 共用即時搜尋框 -->
           <div class="bg-white rounded-3xl border border-sand p-4 sm:p-5 shadow-2xs space-y-4">
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <!-- 雙模式主切換 -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-cream p-1.5 rounded-2xl border border-sand flex-1">
                 <button
                   type="button"
@@ -3286,7 +3615,6 @@
                 >💬 自我懷疑與賦權句庫（從念頭改劇本）</button>
               </div>
 
-              <!-- 共用搜尋框 -->
               <div class="relative w-full lg:w-72 shrink-0">
                 <input
                   id="lexicon-search-input"
@@ -3306,7 +3634,6 @@
               </div>
             </div>
 
-            <!-- 共用搜尋即時雙向結果摘要 -->
             ${keyword ? `
               <div class="pt-3 border-t border-sand space-y-3 animate-fade-up">
                 <div class="text-xs font-bold text-deepsea">
@@ -3350,7 +3677,6 @@
               </div>
             ` : ''}
 
-            <!-- 子工具列：依目前模式顯示「正負向星系切換」或「生活情境分類」 -->
             ${isWordsMode ? `
               <div class="pt-3 border-t border-sand/70 space-y-3">
                 <div class="flex flex-wrap items-center gap-2">
@@ -3417,7 +3743,6 @@
             `}
           </div>
 
-          <!-- ==================== 模式 A：情緒詞庫與新可能 ==================== -->
           ${isWordsMode ? `
             <div class="bg-white rounded-3xl border border-sand p-5 sm:p-6 shadow-2xs space-y-4">
               <div class="space-y-1.5">
@@ -3496,7 +3821,6 @@
                   >✨ 帶入步驟 2 感受探索 ➔</button>
                 </div>
 
-                <!-- 同一個資源的兩面 + 打破「沒辦法」的更多選擇方向 -->
                 <div class="bg-gradient-to-br from-warmgoldLight/55 via-linen to-sageLight/45 rounded-2xl border border-warmgold/35 p-4 sm:p-5 space-y-4">
                   <div class="space-y-1">
                     <div class="text-xs sm:text-sm font-bold text-deepsea">
@@ -3522,7 +3846,6 @@
                   </div>
                 </div>
 
-                <!-- 內在需要 + 對應正向能量詞彙 -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="bg-deepseaLight/55 rounded-2xl border border-deepsea/20 p-4 space-y-1.5">
                     <div class="text-xs font-bold text-deepsea">🧊 關聯線 ①｜它正在替哪個「內在需要」發聲？</div>
@@ -3546,7 +3869,6 @@
                   </div>
                 </div>
 
-                <!-- 人際溝通的轉化示範 -->
                 <div class="bg-linen rounded-2xl border border-sand p-4 sm:p-5 space-y-3">
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <div class="text-xs sm:text-sm font-bold text-deepsea">🗣️ 關聯線 ③｜人際溝通的轉化：當我有「${escapeHTML(activeWordObj.word)}」時，怎麼說出口？</div>
@@ -3569,7 +3891,6 @@
                   </div>
                 </div>
 
-                <!-- 雙向串聯：跳轉至相關自我對話改寫句 -->
                 ${relatedSentenceHint ? `
                   <div class="pt-1 flex justify-end">
                     <button
@@ -3607,7 +3928,6 @@
                   </div>
                 </div>
 
-                <!-- 安全感地基 + 10 秒生活微光練習 -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="bg-deepseaLight/55 rounded-2xl border border-deepsea/20 p-4 space-y-1.5">
                     <div class="text-xs font-bold text-deepsea">🛡️ 它如何穩固內在的心理安全感？</div>
@@ -3619,12 +3939,10 @@
                   </div>
                 </div>
 
-                <!-- 生活三場景實戰句庫 -->
                 <div class="bg-linen rounded-2xl border border-sand p-4 sm:p-5 space-y-3.5">
                   <div class="text-xs sm:text-sm font-bold text-deepsea">🗣️ 把「${escapeHTML(activeWordObj.word)}」帶進日常的 3 種有溫度說法</div>
 
                   <div class="grid grid-cols-1 gap-3">
-                    <!-- 場景 1：對自己說 -->
                     <div class="bg-white rounded-2xl border border-sage/30 p-4 space-y-2">
                       <div class="flex flex-wrap items-center justify-between gap-2">
                         <span class="text-xs font-bold text-sage">1️⃣ 對自己說（內在定錨與自我滋養）</span>
@@ -3644,7 +3962,6 @@
                       <p class="font-serif text-xs sm:text-sm font-semibold text-deepsea leading-relaxed">${escapeHTML(activeWordObj.selfTalk)}</p>
                     </div>
 
-                    <!-- 場景 2：對關係說（NVC 具體感謝公式） -->
                     <div class="bg-white rounded-2xl border border-deepsea/25 p-4 space-y-2">
                       <div class="flex flex-wrap items-center justify-between gap-2">
                         <span class="text-xs font-bold text-deepsea">2️⃣ 對關係說（NVC 具體感謝公式：事實 ＋ 感受 ＋ 需要）</span>
@@ -3664,7 +3981,6 @@
                       <p class="font-serif text-xs sm:text-sm font-semibold text-deepsea leading-relaxed">${escapeHTML(activeWordObj.commSample)}</p>
                     </div>
 
-                    <!-- 場景 3：壓力中的務實版 -->
                     <div class="bg-sageLight/45 rounded-2xl border border-sage/25 p-4 space-y-2">
                       <div class="flex flex-wrap items-center justify-between gap-2">
                         <span class="text-xs font-bold text-warmgold">3️⃣ 壓力中的務實版（不硬撐、不假裝的微光視角）</span>
@@ -3688,7 +4004,6 @@
               </div>
             `}
           ` : `
-            <!-- ==================== 模式 B：自我懷疑與賦權句庫 ==================== -->
             ${filteredSentences.length === 0 ? `
               <div class="bg-white rounded-3xl border border-sand p-8 text-center space-y-2">
                 <div class="text-2xl">🍃</div>
@@ -3768,7 +4083,6 @@
         </div>
       `;
 
-      // 綁定雙模式切換
       container.querySelectorAll('[data-lex-mode]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.lexiconMode = btn.dataset.lexMode;
@@ -3776,7 +4090,6 @@
         });
       });
 
-      // 綁定搜尋結果直接切換到句庫
       const jumpSentHitsBtn = document.getElementById('lex-jump-to-sentence-hits');
       if (jumpSentHitsBtn) {
         jumpSentHitsBtn.addEventListener('click', () => {
@@ -3786,7 +4099,6 @@
         });
       }
 
-      // 綁定單字卡片底部的雙向跳轉句庫
       container.querySelectorAll('[data-jump-sentence-cat]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.lexiconMode = 'sentences';
@@ -3796,7 +4108,6 @@
         });
       });
 
-      // 綁定極性切換
       container.querySelectorAll('[data-lex-polarity]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.lexiconPolarity = btn.dataset.lexPolarity;
@@ -3807,7 +4118,6 @@
         });
       });
 
-      // 綁定共用搜尋輸入與清除
       const searchInput = document.getElementById('lexicon-search-input');
       if (searchInput) {
         searchInput.addEventListener('input', () => {
@@ -3830,7 +4140,6 @@
         });
       }
 
-      // 綁定搜尋結果點擊跳轉至單字地圖
       container.querySelectorAll('[data-lex-hit-word]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.lexiconMode = 'words';
@@ -3841,7 +4150,6 @@
         });
       });
 
-      // 綁定星系分類切換
       container.querySelectorAll('[data-lex-group]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.lexiconGroupId = btn.dataset.lexGroup;
@@ -3851,7 +4159,6 @@
         });
       });
 
-      // 綁定單字選擇
       container.querySelectorAll('[data-lex-word]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.lexiconSelectedWord = btn.dataset.lexWord;
@@ -3859,7 +4166,6 @@
         });
       });
 
-      // 從負向詞彙一鍵跳轉查看對應的正向詞彙
       container.querySelectorAll('[data-jump-pos-word]').forEach(btn => {
         btn.addEventListener('click', () => {
           const targetWord = btn.dataset.jumpPosWord;
@@ -3874,7 +4180,6 @@
         });
       });
 
-      // 帶入步驟 2 感受探索
       container.querySelectorAll('[data-lex-send-step2]').forEach(btn => {
         btn.addEventListener('click', () => {
           const word = btn.dataset.lexSendStep2;
@@ -3898,7 +4203,6 @@
         });
       });
 
-      // 正向滋養詞庫一鍵帶入步驟 5 新神經鏈力量宣言
       container.querySelectorAll('[data-lex-apply-pos-step5]').forEach(btn => {
         btn.addEventListener('click', () => {
           const cleanText = (btn.dataset.lexApplyPosStep5 || '').replace(/[「」]/g, '');
@@ -3910,7 +4214,6 @@
         });
       });
 
-      // 詞庫溝通句語音朗讀
       container.querySelectorAll('[data-lex-speak]').forEach(btn => {
         btn.addEventListener('click', () => {
           const cleanText = (btn.dataset.lexSpeak || '').replace(/[「」]/g, '');
@@ -3934,7 +4237,6 @@
         });
       });
 
-      // 詞庫溝通句複製
       container.querySelectorAll('[data-lex-copy]').forEach(btn => {
         btn.addEventListener('click', () => {
           const cleanText = (btn.dataset.lexCopy || '').replace(/[「」]/g, '');
@@ -3955,7 +4257,6 @@
         });
       });
 
-      // 模式 B（句庫）情境分類與卡片互動
       container.querySelectorAll('[data-vocab-cat]').forEach(btn => {
         btn.addEventListener('click', () => {
           state.vocabCategory = btn.dataset.vocabCat;
@@ -4026,7 +4327,7 @@
     }
 
     // =========================================================================
-    // 9. 分頁四：四種姿態核心比較（桌機表格 + 手機卡片）
+    // 9. 分頁四：四種姿態核心比較（桌機表格 + 手機卡片 + 肢體代表圖）
     // =========================================================================
     function renderStancePoseSVG(stanceId) {
       const poses = {
@@ -4036,18 +4337,12 @@
           border: '#E5CFA8',
           svg: `
             <svg viewBox="0 0 120 92" class="w-24 h-20 mx-auto" role="img" aria-label="討好姿態肢體代表圖：單膝微跪、伸手迎合">
-              <!-- 地面線 -->
               <line x1="18" y1="80" x2="102" y2="80" stroke="#D5CBB8" stroke-width="2" stroke-linecap="round" />
-              <!-- 頭部（微微仰望） -->
               <circle cx="54" cy="24" r="8.5" fill="#274C6B" />
-              <!-- 微跪前傾軀幹 -->
               <path d="M52 34 C46 44, 44 52, 46 60" stroke="#274C6B" stroke-width="6.5" stroke-linecap="round" fill="none" />
-              <!-- 單膝跪地雙腿 -->
               <path d="M46 60 L34 70 L24 78" stroke="#274C6B" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
               <path d="M46 60 L58 67 L58 78" stroke="#274C6B" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              <!-- 伸出討好迎合的手臂 -->
               <path d="M51 39 L72 34 L88 26" stroke="#C89648" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              <!-- 另一手收在胸前 -->
               <path d="M48 41 L39 48 L47 52" stroke="#4E7D6E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
             </svg>
           `
@@ -4058,18 +4353,12 @@
           border: '#E4BEB0',
           svg: `
             <svg viewBox="0 0 120 92" class="w-24 h-20 mx-auto" role="img" aria-label="指責姿態肢體代表圖：前傾叉腰、單手指責">
-              <!-- 地面線 -->
               <line x1="18" y1="80" x2="102" y2="80" stroke="#D5CBB8" stroke-width="2" stroke-linecap="round" />
-              <!-- 頭部（前壓） -->
               <circle cx="52" cy="19" r="8.5" fill="#274C6B" />
-              <!-- 前傾強勢軀幹 -->
               <path d="M50 29 L45 53" stroke="#274C6B" stroke-width="6.5" stroke-linecap="round" fill="none" />
-              <!-- 穩固開立雙腿 -->
               <path d="M45 53 L34 78" stroke="#274C6B" stroke-width="5.5" stroke-linecap="round" fill="none" />
               <path d="M45 53 L56 78" stroke="#274C6B" stroke-width="5.5" stroke-linecap="round" fill="none" />
-              <!-- 叉腰左手 -->
               <path d="M48 34 L33 43 L44 50" stroke="#4E7D6E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              <!-- 筆直向前指責的右手 -->
               <path d="M50 34 L88 30" stroke="#BA7052" stroke-width="5" stroke-linecap="round" fill="none" />
               <path d="M84 26 L92 30 L84 34" stroke="#BA7052" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
             </svg>
@@ -4081,16 +4370,11 @@
           border: '#C5D5E3',
           svg: `
             <svg viewBox="0 0 120 92" class="w-24 h-20 mx-auto" role="img" aria-label="超理智姿態肢體代表圖：筆直僵硬、雙臂抱胸">
-              <!-- 地面線 -->
               <line x1="18" y1="80" x2="102" y2="80" stroke="#D5CBB8" stroke-width="2" stroke-linecap="round" />
-              <!-- 頭部（端正） -->
               <circle cx="60" cy="18" r="8.5" fill="#274C6B" />
-              <!-- 筆直垂直軀幹 -->
               <line x1="60" y1="28" x2="60" y2="54" stroke="#274C6B" stroke-width="6.5" stroke-linecap="round" />
-              <!-- 併攏筆直雙腿 -->
               <line x1="56" y1="54" x2="55" y2="78" stroke="#274C6B" stroke-width="5" stroke-linecap="round" />
               <line x1="64" y1="54" x2="65" y2="78" stroke="#274C6B" stroke-width="5" stroke-linecap="round" />
-              <!-- 雙臂交叉抱胸防線 -->
               <path d="M48 35 L72 42" stroke="#C89648" stroke-width="4.8" stroke-linecap="round" />
               <path d="M72 35 L48 42" stroke="#4E7D6E" stroke-width="4.8" stroke-linecap="round" />
             </svg>
@@ -4102,20 +4386,13 @@
           border: '#C2D9CE',
           svg: `
             <svg viewBox="0 0 120 92" class="w-24 h-20 mx-auto" role="img" aria-label="打岔姿態肢體代表圖：重心歪斜、手足朝不同方向擺動">
-              <!-- 地面線 -->
               <line x1="18" y1="80" x2="102" y2="80" stroke="#D5CBB8" stroke-width="2" stroke-linecap="round" />
-              <!-- 頭部（側歪） -->
               <circle cx="67" cy="21" r="8.5" fill="#274C6B" />
-              <!-- 扭轉歪斜軀幹 -->
               <path d="M64 31 Q52 43 58 55" stroke="#274C6B" stroke-width="6.5" stroke-linecap="round" fill="none" />
-              <!-- 內八不對稱雙腿 -->
               <path d="M58 55 L46 66 L50 78" stroke="#274C6B" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
               <path d="M58 55 L73 65 L69 78" stroke="#274C6B" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              <!-- 向上揮舞左手 -->
               <path d="M59 35 L42 29 L36 18" stroke="#4E7D6E" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              <!-- 向旁擺動右手 -->
               <path d="M62 37 L79 44 L87 36" stroke="#C89648" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-              <!-- 跳躍動態小弧線 -->
               <path d="M82 17 Q88 21 85 27" stroke="#BA7052" stroke-width="2" stroke-linecap="round" fill="none" />
             </svg>
           `
@@ -4141,7 +4418,6 @@
       if (!container) return;
 
       container.innerHTML = `
-        <!-- 桌機版表格 -->
         <div class="hidden md:block bg-white rounded-3xl border border-sand shadow-xs overflow-hidden">
           <table class="w-full text-left border-collapse">
             <thead>
@@ -4189,7 +4465,6 @@
           </table>
         </div>
 
-        <!-- 手機版卡片清單 -->
         <div class="md:hidden space-y-4">
           ${FOUR_COPING_IDS.map(id => {
             const s = STANCES[id];
@@ -4222,9 +4497,352 @@
     }
 
     // =========================================================================
-    // 10. 全域事件與初始化
+    // 10. 分頁五：七大脈輪與花精地圖渲染
     // =========================================================================
-    // 9. 全域事件與初始化
+    function renderChakra() {
+      const container = document.getElementById('chakra-content');
+      if (!container) return;
+
+      const activeChakra = CHAKRA_DATA.find(c => c.id === state.selectedChakraId) || CHAKRA_DATA[3];
+      const activeSeries = FLOWER_ESSENCE_SERIES.find(s => s.id === state.essenceSeriesId) || FLOWER_ESSENCE_SERIES[0];
+      const primaryStance = STANCES[activeChakra.primaryStanceId] || STANCES.placater;
+
+      const ritualFullText = [
+        '【花精自我照顧｜與身體對話的靜心儀式】',
+        ...ESSENCE_RITUAL_STEPS.map(s => `${s.step}. ${s.title}\n${s.action}\n${s.dialogue}`)
+      ].join('\n\n');
+
+      const ritualVoiceScript = '現在，找一個安穩的姿勢坐好，輕輕閉上眼睛，做三次緩慢而深長的呼吸。感受空氣在身體裡流動，給自己一份溫暖和接納。我允許任何情緒、念頭或感受，此刻在身體裡自然流動。當一個念頭、情緒或感受浮現時，把手掌輕輕撫著胸口，或放在有感覺的部位上，溫柔地對它說：我看到你了。謝謝你，我感受到你了，謝謝你的出現，我會在這邊陪你。現在，取對應脈輪的花晶敷在這個部位，雙手搓揉後深深嗅吸，讓花晶的頻率溫柔走進身體深處。';
+
+      container.innerHTML = `
+        <div class="space-y-8">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div class="lg:col-span-5 bg-white rounded-3xl border border-sand p-4 sm:p-5 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between px-1">
+                <h2 class="font-serif text-sm sm:text-base font-bold text-deepsea">直式七大脈輪能量中軸</h2>
+                <span class="text-[11px] text-muted">由上而下 · 點擊切換</span>
+              </div>
+
+              <div class="relative space-y-2.5">
+                <div class="hidden sm:block absolute left-7 top-6 bottom-6 w-0.5 bg-gradient-to-b from-purple-300 via-emerald-300 to-rose-300 pointer-events-none" aria-hidden="true"></div>
+
+                ${CHAKRA_DATA.map(ch => {
+                  const isSelected = ch.id === activeChakra.id;
+                  return `
+                    <button
+                      type="button"
+                      data-chakra-id="${ch.id}"
+                      class="relative w-full rounded-2xl border p-3 sm:p-3.5 text-left transition-all duration-200 cursor-pointer flex items-start gap-3 ${
+                        isSelected
+                          ? 'bg-white shadow-sm ring-2'
+                          : 'bg-linen/70 border-sand hover:bg-white'
+                      }"
+                      style="${isSelected ? `border-color: ${ch.colorHex}; --tw-ring-color: ${ch.colorHex}33;` : ''}"
+                    >
+                      <div
+                        class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 border shadow-2xs z-10"
+                        style="background-color: ${ch.colorBg}; border-color: ${ch.colorBorder}; color: ${ch.colorHex};"
+                      >${ch.num}</div>
+
+                      <div class="min-w-0 flex-1 space-y-1.5">
+                        <div class="flex flex-wrap items-center justify-between gap-1">
+                          <div class="font-bold text-xs sm:text-sm text-deepsea">
+                            ${ch.name} <span class="text-[11px] font-normal text-muted">(${ch.englishName})</span>
+                          </div>
+                          <span class="text-[11px] font-medium text-muted">${ch.anatomy}</span>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1">
+                          <span class="text-[10px] font-bold text-muted">常見防衛：</span>
+                          ${ch.stanceTags.map(st => `
+                            <span class="px-2 py-0.5 rounded-md bg-white border border-sand text-[11px] font-semibold text-ink">
+                              ${st.label}
+                            </span>
+                          `).join('')}
+                        </div>
+                      </div>
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <div class="lg:col-span-7 bg-white rounded-3xl border-2 p-5 sm:p-7 shadow-xs space-y-5 animate-fade-up" style="border-color: ${activeChakra.colorBorder};">
+              <div class="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-sand">
+                <div class="space-y-1.5">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      class="px-3 py-1 rounded-full text-xs font-bold border"
+                      style="background-color: ${activeChakra.colorBg}; border-color: ${activeChakra.colorBorder}; color: ${activeChakra.colorHex};"
+                    >${activeChakra.num} ${activeChakra.numberLabel} · ${activeChakra.anatomy}</span>
+                    ${activeChakra.stanceTags.map(st => `
+                      <button
+                        type="button"
+                        data-chakra-to-wizard="${st.id}"
+                        title="點擊直接帶著「${st.label}」進入六步自我整合引導"
+                        class="px-2.5 py-0.5 rounded-full bg-cream hover:bg-sageLight border border-sand hover:border-sage/45 text-xs font-semibold text-deepsea transition-colors cursor-pointer inline-flex items-center gap-1"
+                      >
+                        <span>${st.label}</span>
+                        <span class="text-[10px] text-sage">➔</span>
+                      </button>
+                    `).join('')}
+                  </div>
+                  <h3 class="font-serif text-xl sm:text-2xl font-bold text-deepsea pt-1">
+                    ${activeChakra.name}（${activeChakra.englishName}）
+                  </h3>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    data-chakra-to-wizard="${activeChakra.primaryStanceId}"
+                    class="px-3.5 py-2 rounded-xl bg-sage hover:bg-sage/90 text-white text-xs font-bold shadow-2xs transition-all active:scale-95 cursor-pointer"
+                  >🌬️ 帶著「${primaryStance.shortName}」進入六步引導 ➔</button>
+                  <button
+                    type="button"
+                    data-chakra-to-atlas="${activeChakra.primaryStanceId}"
+                    class="px-3 py-2 rounded-xl bg-linen hover:bg-cream border border-sand text-xs font-semibold text-deepsea transition-colors cursor-pointer"
+                  >📖 查看姿態圖鑑</button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="rounded-2xl border p-4 space-y-1.5" style="background-color: ${activeChakra.colorBg}88; border-color: ${activeChakra.colorBorder};">
+                  <div class="text-xs font-bold text-deepsea">🧭 核心生命課題</div>
+                  <p class="font-serif text-xs sm:text-sm font-semibold text-ink leading-relaxed">${activeChakra.lifeTheme}</p>
+                </div>
+                <div class="bg-linen rounded-2xl border border-sand p-4 space-y-1.5">
+                  <div class="text-xs font-bold text-clay">🫀 身體失衡微氣象</div>
+                  <p class="text-xs sm:text-sm text-ink leading-relaxed">${activeChakra.bodySigns}</p>
+                </div>
+              </div>
+
+              <div class="bg-linen/80 rounded-2xl border border-sand p-4 sm:p-5 space-y-3">
+                <div class="text-xs sm:text-sm font-bold text-deepsea">🛡️ 薩提爾應對姿態解碼（能量失衡的兩種表現）</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div class="bg-white rounded-xl border border-clay/30 p-3.5 space-y-1">
+                    <div class="text-xs font-bold text-clay">${activeChakra.imbalance.overTitle}</div>
+                    <p class="text-xs text-ink leading-relaxed">${activeChakra.imbalance.overDesc}</p>
+                  </div>
+                  <div class="bg-white rounded-xl border border-deepsea/25 p-3.5 space-y-1">
+                    <div class="text-xs font-bold text-deepsea">${activeChakra.imbalance.underTitle}</div>
+                    <p class="text-xs text-ink leading-relaxed">${activeChakra.imbalance.underDesc}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-deepseaLight/60 rounded-2xl border border-deepsea/20 p-4 space-y-2">
+                  <div class="text-xs font-bold text-deepsea">🧊 冰山底層渴望／NVC 需要</div>
+                  <div class="flex flex-wrap gap-1.5">
+                    ${activeChakra.icebergNeeds.map(n => `
+                      <span class="px-2.5 py-1 rounded-full bg-white border border-deepsea/20 text-xs font-bold text-deepsea">${n}</span>
+                    `).join('')}
+                  </div>
+                </div>
+                <div class="bg-sageLight/65 rounded-2xl border border-sage/30 p-4 space-y-1.5">
+                  <div class="text-xs font-bold text-sage">✨ 平衡後的一致性資源（3/3）</div>
+                  <p class="text-xs sm:text-sm font-medium text-ink leading-relaxed">${activeChakra.congruenceResource}</p>
+                </div>
+              </div>
+
+              <div class="bg-gradient-to-br from-warmgoldLight/60 via-white to-sageLight/50 rounded-2xl border border-warmgold/35 p-4 sm:p-5 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="text-xs sm:text-sm font-bold text-deepsea">🌿 澳洲花晶與光子系列對應搭配（「滴、敷、嗅」共振）</div>
+                  <span class="px-2.5 py-0.5 rounded-full bg-white border border-warmgold/35 text-[11px] font-semibold text-warmgold">身體花晶 × 光子系列</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  <div class="bg-white/90 rounded-xl border border-sand p-3 space-y-0.5">
+                    <div class="font-bold text-sage">🌈 脈輪系列</div>
+                    <div class="text-ink leading-relaxed">${activeChakra.essences.chakra}</div>
+                  </div>
+                  <div class="bg-white/90 rounded-xl border border-sand p-3 space-y-0.5">
+                    <div class="font-bold text-deepsea">✨ 淨化系列</div>
+                    <div class="text-ink leading-relaxed">${activeChakra.essences.purify}</div>
+                  </div>
+                  <div class="bg-white/90 rounded-xl border border-sand p-3 space-y-0.5">
+                    <div class="font-bold text-warmgold">🧭 支持系列</div>
+                    <div class="text-ink leading-relaxed">${activeChakra.essences.support}</div>
+                  </div>
+                  <div class="bg-white/90 rounded-xl border border-sand p-3 space-y-0.5">
+                    <div class="font-bold text-clay">💫 光子系列</div>
+                    <div class="text-ink leading-relaxed">${activeChakra.essences.photon}</div>
+                  </div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-sage/25 p-3.5 text-xs text-ink leading-relaxed">
+                  <strong class="text-sage">🤲 塗敷與嗅吸步驟：</strong>${activeChakra.essences.howToUse}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-3xl border border-sand p-5 sm:p-7 shadow-2xs space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="font-serif text-base sm:text-lg font-bold text-deepsea">🌺 澳洲花晶四大系列自我照顧總覽</h3>
+                <p class="text-xs text-muted">傳統作法為「先敷身體花晶（滴、敷、嗅），再於同部位薄擦光子花鑰霜」加乘身心共振。</p>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                ${FLOWER_ESSENCE_SERIES.map(ser => {
+                  const active = ser.id === activeSeries.id;
+                  return `
+                    <button
+                      type="button"
+                      data-essence-series="${ser.id}"
+                      class="px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                        active
+                          ? 'bg-deepsea text-white border-deepsea shadow-2xs'
+                          : 'bg-linen border-sand text-ink hover:bg-cream'
+                      }"
+                    >${ser.name.replace('身體花晶｜', '')}</button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <div class="bg-linen/80 rounded-2xl border border-sand p-4 sm:p-5 space-y-3 animate-fade-up">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="font-bold text-sm text-deepsea">${activeSeries.name}</div>
+                <span class="px-2.5 py-0.5 rounded-full bg-white border border-sand text-[11px] font-semibold text-sage">${activeSeries.badge}</span>
+              </div>
+              <p class="text-xs text-muted leading-relaxed">${activeSeries.summary}</p>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                ${activeSeries.items.map(it => `
+                  <div class="bg-white rounded-2xl border border-sand p-4 space-y-1.5 shadow-2xs">
+                    <div class="text-xs sm:text-sm font-bold text-deepsea">🌿 ${it.title}</div>
+                    <p class="text-xs text-ink leading-relaxed">${it.desc}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gradient-to-br from-cream via-white to-sageLight/55 rounded-3xl border-2 border-sage/35 p-5 sm:p-8 shadow-xs space-y-5">
+            <div class="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-sand">
+              <div class="space-y-1.5 max-w-2xl">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sageLight text-sage text-xs font-bold">
+                  <span>🌸 花精自我照顧</span>
+                  <span>·</span>
+                  <span>開啟身體接收度的靜心對話</span>
+                </div>
+                <h3 class="font-serif text-lg sm:text-xl font-bold text-deepsea">與身體對話的靜心儀式（動作 × 內在語言）</h3>
+                <p class="text-xs sm:text-sm text-ink leading-relaxed">
+                  情緒藏在身體裡，當我們對自己身體還不是那麼熟悉時，直接擦花精的效果往往有限；透過下面溫柔的身體動作與內在對話，能快速打開身體的接收度，讓花晶的頻率真正走進身體深處。
+                </p>
+              </div>
+
+              <div class="flex flex-wrap gap-2 shrink-0">
+                <button
+                  type="button"
+                  id="speak-essence-ritual-btn"
+                  class="px-4 py-2.5 rounded-2xl bg-sage hover:bg-sage/90 text-white text-xs font-bold shadow-2xs transition-all active:scale-95 cursor-pointer"
+                >🔊 溫柔語音帶領靜心儀式</button>
+                <button
+                  type="button"
+                  id="copy-essence-ritual-btn"
+                  class="px-3.5 py-2.5 rounded-2xl bg-white hover:bg-cream border border-sand text-xs font-semibold text-deepsea transition-colors cursor-pointer"
+                >📋 複製靜心引導詞</button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3.5">
+              ${ESSENCE_RITUAL_STEPS.map(r => `
+                <div class="bg-white/95 rounded-2xl border border-sand p-4 sm:p-5 flex flex-col sm:flex-row items-start gap-3.5 shadow-2xs">
+                  <div class="w-9 h-9 rounded-2xl bg-sageLight border border-sage/30 text-sage font-bold text-xs flex items-center justify-center shrink-0">
+                    ${r.step}
+                  </div>
+                  <div class="space-y-1.5 flex-1">
+                    <div class="text-sm font-bold text-deepsea">${r.title}</div>
+                    <p class="text-xs font-semibold text-warmgold leading-relaxed">${r.action}</p>
+                    <p class="font-serif text-xs sm:text-sm text-ink leading-relaxed bg-linen/75 rounded-xl px-3.5 py-2.5 border border-sand/70">
+                      ${r.dialogue}
+                    </p>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+
+      container.querySelectorAll('[data-chakra-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.selectedChakraId = btn.dataset.chakraId;
+          renderChakra();
+        });
+      });
+
+      container.querySelectorAll('[data-essence-series]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.essenceSeriesId = btn.dataset.essenceSeries;
+          renderChakra();
+        });
+      });
+
+      container.querySelectorAll('[data-chakra-to-wizard]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const chosenStanceId = btn.dataset.chakraToWizard;
+          const chosenStance = STANCES[chosenStanceId] || primaryStance;
+          state.wizard.stanceId = chosenStanceId;
+          state.wizard.breathFocus = activeChakra.suggestedBreathFocus;
+          state.wizard.step = 1;
+          state.wizard.claimedTraits = [];
+          state.wizard.interrupted = false;
+          switchMainTab('wizard');
+          showToast(`已帶著「${activeChakra.name}」的覺察焦點與「${chosenStance.shortName}」姿態進入六步引導！`, '🌬️');
+        });
+      });
+
+      container.querySelectorAll('[data-chakra-to-atlas]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.atlasStance = btn.dataset.chakraToAtlas;
+          state.atlasCuriosityOpen = false;
+          state.atlasBlindSpotOpen = false;
+          state.atlasRevealedTraits = [];
+          switchMainTab('atlas');
+        });
+      });
+
+      const speakRitualBtn = document.getElementById('speak-essence-ritual-btn');
+      if (speakRitualBtn) {
+        speakRitualBtn.addEventListener('click', () => {
+          if (!('speechSynthesis' in window)) {
+            showToast('目前的瀏覽器不支援語音引導功能', '🔇');
+            return;
+          }
+          const prev = state.wizard.voiceGuideEnabled;
+          state.wizard.voiceGuideEnabled = true;
+          speakBreathVoice(ritualVoiceScript);
+          state.wizard.voiceGuideEnabled = prev;
+          showToast('正在以溫柔緩慢語音帶領你進行花精身體靜心對話⋯', '🔊');
+        });
+      }
+
+      const copyRitualBtn = document.getElementById('copy-essence-ritual-btn');
+      if (copyRitualBtn) {
+        copyRitualBtn.addEventListener('click', () => {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = ritualFullText;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) {
+              showToast('已複製「與身體對話的靜心儀式」引導詞！', '📋');
+            }
+          } catch (e) {}
+        });
+      }
+    }
+
+    // =========================================================================
+    // 11. 全域事件與初始化
     // =========================================================================
     function initApp() {
       document.querySelectorAll('.main-tab-btn').forEach(btn => {
